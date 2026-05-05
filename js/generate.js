@@ -135,7 +135,6 @@ const state = {
   staffList: [],
   requests: [],       // ringo_shift_requests（希望休）
   assignments: [],     // ringo_shift_assignments（生成結果）
-  monthlySettings: {},
   currentYear: new Date().getFullYear(),
   currentMonth: new Date().getMonth(),
   holidays: {},
@@ -481,7 +480,6 @@ async function loadData() {
     { id: 'ringo-102', name: '小野寺 美桜子', role: 'office', display_order: 6, is_active: true },
     { id: 'ringo-103', name: '笠原 若菜', role: 'office', display_order: 7, is_active: true }
   ];
-  state.monthlySettings = {};
 }
 
 async function loadRequests(yearMonth) {
@@ -1212,8 +1210,6 @@ function renderGantt() {
 
   // 集計欄の色分け用定数
   const ym = getCurrentYearMonth();
-  const daysOff = state.monthlySettings[ym] || 10;
-
 
   // 薬剤師グループの最終インデックスを検出（roleがpharmacistの最後の行）
   let lastPharmacistIdx = -1;

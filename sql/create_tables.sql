@@ -7,7 +7,6 @@
 -- 既存テーブルの削除（依存関係の順序に注意）
 DROP TABLE IF EXISTS ringo_shift_assignments CASCADE;
 DROP TABLE IF EXISTS ringo_shift_requests CASCADE;
-DROP TABLE IF EXISTS ringo_monthly_settings CASCADE;
 DROP TABLE IF EXISTS ringo_staff CASCADE;
 
 -- ============================================================
@@ -65,15 +64,6 @@ CREATE TABLE ringo_shift_assignments (
 CREATE INDEX idx_shift_assignments_yearmonth ON ringo_shift_assignments(year_month);
 CREATE INDEX idx_shift_assignments_date ON ringo_shift_assignments(date);
 
--- ============================================================
--- 4. ringo_monthly_settings テーブル（月別公休数設定）
--- ============================================================
-CREATE TABLE ringo_monthly_settings (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  year_month TEXT NOT NULL UNIQUE,
-  employee_days_off INTEGER NOT NULL DEFAULT 10,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
 
 -- ============================================================
 -- 5. トリガー（updated_at 自動更新）
@@ -98,12 +88,7 @@ CREATE TRIGGER shift_requests_updated_at
 -- 6. 初期データ投入
 -- ============================================================
 
--- 月別公休数
-INSERT INTO ringo_monthly_settings (year_month, employee_days_off) VALUES
-  ('2026-01', 10), ('2026-02', 9), ('2026-03', 10), ('2026-04', 10),
-  ('2026-05', 10), ('2026-06', 9), ('2026-07', 10), ('2026-08', 10),
-  ('2026-09', 9),  ('2026-10', 9), ('2026-11', 10), ('2026-12', 10),
-  ('2027-01', 10), ('2027-02', 9), ('2027-03', 10), ('2027-04', 10);
+
 
 -- スタッフ（薬剤師 4名）
 INSERT INTO ringo_staff (employee_no, name, display_order, role, staff_type, work_conditions) VALUES
