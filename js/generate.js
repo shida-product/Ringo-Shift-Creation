@@ -133,8 +133,8 @@ function getHolidays(year) {
 // ============================================================
 const state = {
   staffList: [],
-  requests: [],       // shift_requests（希望休）
-  assignments: [],     // shift_assignments（生成結果）
+  requests: [],       // ringo_shift_requests（希望休）
+  assignments: [],     // ringo_shift_assignments（生成結果）
   monthlySettings: {},
   currentYear: new Date().getFullYear(),
   currentMonth: new Date().getMonth(),
@@ -727,6 +727,16 @@ function runAllChecks(assignments, yearMonth) {
   const staffChecks = {};
   const bonusItems = [];
 
+  // 固定休ルール定義（仮想固定休はG2に引っかからないため個別チェック）
+  const DAY_NAMES_JA = ['日', '月', '火', '水', '木', '金', '土'];
+  const FIXED_OFF_RULES = [
+    { key: '鈴木',   days: [0, 5]          }, // 日・金
+    { key: '服部',   days: [1, 2]          }, // 月・火
+    { key: '野口',   days: [0, 1]          }, // 日・月
+    { key: '小野寺', days: [3, 6]          }, // 水・土
+    { key: '笠原',   days: [2, 3, 4, 5, 6] }, // 火〜土
+  ];
+
   // 各スタッフごとの個別チェック
   for (const staff of staffList) {
     const workCount = work(staff.id).length;
@@ -811,6 +821,23 @@ function runAllChecks(assignments, yearMonth) {
         text: '1人勤務なし（服部or鈴木とペア）',
         value: aloneCount === 0 ? '○' : `${aloneCount}日単独`,
         scoreDelta: aloneCount > 0 ? -100 * aloneCount : 0
+      });
+    }
+
+    // 固定休の遵守チェック（仮想固定休はG2に引っかからないため個別にチェック）
+    const fixedRule = FIXED_OFF_RULES.find(r => staff.name.includes(r.key));
+    if (fixedRule) {
+      const violations = work(staff.id).filter(a => {
+        const dow = new Date(a.date + 'T00:00:00').getDay();
+        return fixedRule.days.includes(dow);
+      }).length;
+      const offLabel = fixedRule.days.map(d => DAY_NAMES_JA[d]).join('・');
+      items.push({
+        id: `${staff.id}-fixed-off`, tag: '絶対',
+        status: violations === 0 ? 'pass' : 'fail',
+        text: `固定休（${offLabel}）に出勤していない`,
+        value: violations === 0 ? '○' : `${violations}日違反`,
+        scoreDelta: violations > 0 ? -200 * violations : 0
       });
     }
 
@@ -1649,7 +1676,7 @@ async function loadHistoryData() {
   }
 
   const { data, error } = await supabase
-    .from('shift_assignments')
+    .from('ringo_shift_assignments')
     .select('year_month, staff_id, attendance_type, work_pattern')
     .in('year_month', months);
   if (error) { console.error(error); return { months, byStaffMonth: {} }; }
