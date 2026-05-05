@@ -1,4 +1,4 @@
----
+﻿---
 description: 本番デプロイ手順（GitHub Pages / Vercel 経由）
 ---
 
@@ -35,7 +35,7 @@ git diff --stat
 
 ```bash
 git add <変更ファイル>
-git commit -m "feat(generate): りんご薬局スタッフ定義を更新"
+git commit -m "feat(generate): りんごちゃん薬局スタッフ定義を更新"
 ```
 
 ### 3. デプロイ

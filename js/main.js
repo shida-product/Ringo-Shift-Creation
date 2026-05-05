@@ -1,4 +1,4 @@
-/**
+﻿/**
  * シフト希望 メイン画面ロジック
  * - ガントチャート（PC）：ドラッグ→モーダル確認→登録
  * - カレンダー（スマホ）
@@ -372,7 +372,7 @@ function setupGanttHover() {
 // データ取得
 // ============================================================
 async function loadStaffList() {
-  // 元のオオギ薬局DBから取得する代わりに、りんご薬局の指定7名をハードコード
+  // 元のオオギ薬局DBから取得する代わりに、りんごちゃん薬局の指定7名をハードコード
   state.staffList = [
     { id: 'ringo-1', name: '鈴木 怜那', role: 'pharmacist', display_order: 1 },
     { id: 'ringo-3', name: '福島 真依子', role: 'pharmacist', display_order: 2 },

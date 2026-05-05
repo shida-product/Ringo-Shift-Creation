@@ -1,4 +1,4 @@
-# りんご薬局 シフト作成ツール 作業履歴 (Changelog)
+﻿# りんごちゃん薬局 シフト作成ツール 作業履歴 (Changelog)
 
 このファイルは、**AIセッションの作業履歴** と **シフト生成ロジックの変更ログ** を一元管理する **長期記憶用ファイル** です。
 普段のセッションでは読み込む必要はありません。過去の経緯を調査する必要がある場合のみ参照してください。
@@ -45,7 +45,7 @@
 ### [2026-05-05] .agents/ ディレクトリ初期化
 
 - ボイラープレート（`ai-agent-boilerplate`）最新版を適用し、AI挙動ファイル群を新規作成：
-  - `CLAUDE.md`（プロジェクトルート）— りんご薬局固有情報で完全カスタマイズ
+  - `CLAUDE.md`（プロジェクトルート）— りんごちゃん薬局固有情報で完全カスタマイズ
   - `.agents/handover.md` / `.agents/lessons.md` / `.agents/changelog.md`（本ファイル）
   - `.agents/lessons/encoding.md` / `general.md` / `README.md`
   - `.agents/workflows/`（7ファイル: add-page / codebase-guide / css-conventions / deploy / development-workflow / security-checklist / terminal-encoding）
@@ -75,7 +75,7 @@
 ## 過去ログ: シフト生成ロジック変更履歴（旧プロジェクト踏襲分）
 
 > 以下は旧プロジェクト（大黄薬局等）からコピーされたシフト生成ロジック（`generate.js`）の変更履歴。
-> りんご薬局向けにアルゴリズムを改修した際は、本章の上部（新しい順）に追記すること。
+> りんごちゃん薬局向けにアルゴリズムを改修した際は、本章の上部（新しい順）に追記すること。
 
 ---
 
