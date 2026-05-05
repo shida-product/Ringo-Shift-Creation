@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>シフト生成 - りんごちゃん薬局</title>
+  <meta name="description" content="りんごちゃん薬局 シフト自動生成・調整ツール">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/common.css?v=8">
+  <link rel="stylesheet" href="css/generate.css?v=8">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <script>
+    if (localStorage.getItem('ogiyakkyoku_auth') !== 'true') {
+      window.location.href = 'login.html';
+    }
+  </script>
+</head>
+<body class="theme-layered">
+  <!-- ヘッダー -->
+  <header class="app-header">
+    <div class="app-header__title">
+      <i data-lucide="calendar-cog" style="width:20px;height:20px;"></i>
+      <span class="app-title-text">シフト生成</span>
+    </div>
+
+    <div class="month-nav" style="margin: 0 auto;">
+      <button class="month-nav__btn" id="prev-month" aria-label="前月" type="button"><i data-lucide="chevron-left" style="width:18px;height:18px;"></i></button>
+      <span class="month-nav__label" id="month-label" title="クリックして月を選択" style="cursor: pointer; user-select: none;"></span>
+      <button class="month-nav__btn" id="next-month" aria-label="次月" type="button"><i data-lucide="chevron-right" style="width:18px;height:18px;"></i></button>
+      <button class="month-nav__today-btn" id="today-month-btn" title="今月に戻る" style="display:none;">今月へ戻る</button>
+    </div>
+
+    <nav class="app-header__nav">
+      <!-- 共通ナビゲーション追加 -->
+      <a href="index.html" class="app-header__link"><i data-lucide="calendar" style="width:16px;height:16px;"></i> 希望休</a>
+      <a href="generate.html" class="app-header__link" style="color:var(--color-primary);font-weight:600;"><i data-lucide="calendar-cog" style="width:16px;height:16px;"></i> シフト生成</a>
+      <a href="admin.html" class="app-header__link"><i data-lucide="palette" style="width:16px;height:16px;"></i> 設定</a>
+
+      <div class="header-divider" style="margin: 0 12px; height: 24px; border-left: 1px solid var(--color-border);"></div>
+
+      <!-- 凡例 -->
+      <div class="legend legend--chips" id="legend" aria-label="表示の凡例" style="align-items: center;">
+        <span style="font-size: 0.75rem; font-weight: 700; color: var(--color-text-secondary); margin-right: 4px;">勤務パターン:</span>
+        <div class="legend__item"><span class="legend__dot legend__dot--full"></span>終日</div>
+        <div class="legend__item"><span class="legend__dot legend__dot--am"></span>午前</div>
+        <div class="legend__item"><span class="legend__dot legend__dot--pm"></span>午後</div>
+        <div class="legend__item"><span class="legend__dot legend__dot--sun"></span>日曜</div>
+        <div class="legend__item"><span class="legend__dot legend__dot--off"></span>所定休</div>
+
+        <span style="border-left:1px solid var(--color-border); height: 20px; margin:0 8px;"></span>
+
+        <span style="font-size: 0.75rem; font-weight: 700; color: var(--color-text-secondary); margin-right: 4px;">シフト希望:</span>
+        <div class="legend__item"><span class="legend__dot legend__dot--virtual"></span>固定休</div>
+        <div class="legend__item"><span class="legend__dot legend__dot--stripe-off"></span>休み</div>
+        <div class="legend__item"><span class="legend__dot legend__dot--stripe-other"></span>コメント等</div>
+      </div>
+      
+      <div class="header-divider"></div>
+
+      <!-- アクションボタン -->
+      <div class="toolbar__actions" style="display:flex; gap:8px; align-items:center;">
+        <button class="btn btn--primary btn--generate btn--sm" id="btn-generate" type="button" style="padding: 6px 12px;">
+          <i data-lucide="sparkles" style="width:16px;height:16px;"></i> シフト生成
+        </button>
+        <span style="border-left:1px solid var(--color-border);height:24px;"></span>
+        <button class="btn btn--outline btn--sm" id="btn-reset" type="button" disabled title="生成直後の状態に戻す" style="padding:6px 8px;">
+          <i data-lucide="rotate-ccw" style="width:14px;height:14px;"></i>
+        </button>
+        <button class="btn btn--outline btn--sm" id="btn-undo" type="button" disabled title="元に戻す (Undo)" style="padding:6px 8px;">
+          <i data-lucide="undo-2" style="width:14px;height:14px;"></i>
+        </button>
+        <button class="btn btn--outline btn--sm" id="btn-redo" type="button" disabled title="やり直し (Redo)" style="padding:6px 8px;">
+          <i data-lucide="redo-2" style="width:14px;height:14px;"></i>
+        </button>
+        <span style="border-left:1px solid var(--color-border);height:24px;"></span>
+        <button class="btn btn--outline btn--sm" id="btn-csv" type="button" disabled style="padding: 6px 12px;">
+          <i data-lucide="download" style="width:16px;height:16px;"></i> CSV
+        </button>
+      </div>
+
+
+    </nav>
+  </header>
+
+  <main class="main-container">
+
+    <!-- ガントチャート -->
+    <div class="card-surface gantt-wrapper" id="gantt-wrapper" style="padding: 0;">
+      <div class="gantt-placeholder" id="gantt-placeholder">
+        <span class="gantt-placeholder__icon-wrap" aria-hidden="true"><i data-lucide="calendar-plus" style="width:40px;height:40px;"></i></span>
+        <p class="gantt-placeholder__text">月を選択して「<strong>シフト生成</strong>」を押すと、ここにカレンダーが表示されます</p>
+      </div>
+      <table class="gantt-table" id="gantt-table" style="display:none;">
+        <thead id="gantt-head"></thead>
+        <tbody id="gantt-body"></tbody>
+        <tfoot id="gantt-foot"></tfoot>
+      </table>
+    </div>
+
+    <!-- 条件付き・その他希望リスト（アコーディオン） -->
+    <div class="other-reqs-accordion" id="other-reqs-accordion" style="display:none;">
+      <div class="other-reqs-accordion__header" id="other-reqs-header">
+        <span class="other-reqs-accordion__title-icon" aria-hidden="true">
+          <i data-lucide="message-square-warning" style="width:18px;height:18px;"></i>
+        </span>
+        <span class="other-reqs-accordion__title">条件付き・その他の希望</span>
+        <span class="other-reqs-accordion__count" id="other-reqs-count">0件</span>
+        <svg class="other-reqs-accordion__chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-left: auto;"><polyline points="6 9 12 15 18 9"/></svg>
+      </div>
+      <div class="other-reqs-accordion__body">
+        <div class="other-list__items" id="other-reqs-list"></div>
+      </div>
+    </div>
+
+    <!-- 条件チェックパネル -->
+    <div class="card-surface conditions-panel" id="conditions-panel" style="display:none;" role="region" aria-labelledby="conditions-heading">
+      <div class="conditions-panel__title" id="conditions-heading">
+        <span class="conditions-panel__title-icon" aria-hidden="true"><i data-lucide="clipboard-check" style="width:18px;height:18px;"></i></span>
+        <span class="conditions-panel__title-text">条件チェック</span>
+        <span class="conditions-header-badge" id="conditions-header-badge"></span>
+      </div>
+      <div class="conditions-panel__cards" id="conditions-grid"></div>
+    </div>
+
+    <!-- セル編集ドロップダウン -->
+    <div class="cell-editor" id="cell-editor" style="display:none;">
+      <div class="cell-editor__title" id="cell-editor-title"></div>
+      <div class="cell-editor__options" id="cell-editor-options"></div>
+    </div>
+  </main>
+
+  <!-- 月選択モーダル -->
+  <div class="month-picker-overlay" id="month-picker-overlay" style="display:none;">
+    <div class="month-picker-modal" id="month-picker-modal">
+      <div class="month-picker__header">
+        <button class="month-picker__year-btn" id="picker-prev-year">&#8249;</button>
+        <span class="month-picker__year" id="picker-year-label"></span>
+        <button class="month-picker__year-btn" id="picker-next-year">&#8250;</button>
+      </div>
+      <div class="month-picker__grid" id="picker-month-grid"></div>
+      <div class="month-picker__footer">
+        <button class="btn btn--outline btn--sm" id="picker-cancel">キャンセル</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- トースト -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <!-- ホバーツールチップ -->
+  <div class="stripe-tooltip" id="stripe-tooltip" style="display:none;">
+    <div class="stripe-tooltip__type" id="stripe-tooltip-type"></div>
+    <div class="stripe-tooltip__note" id="stripe-tooltip-note"></div>
+  </div>
+
+  <!-- Supabase CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script type="module" src="js/generate.js?v=24"></script>
+  <script>lucide.createIcons();</script>
+</body>
+</html>

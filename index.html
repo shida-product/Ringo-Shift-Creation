@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>シフト希望 - りんごちゃん薬局</title>
+  <meta name="description" content="りんごちゃん薬局 スタッフ希望休管理ツール">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/common.css?v=9">
+  <link rel="stylesheet" href="css/main.css?v=9">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <script>
+    if (localStorage.getItem('ogiyakkyoku_auth') !== 'true') {
+      window.location.href = 'login.html';
+    }
+  </script>
+</head>
+<body>
+  <header class="app-header">
+    <div class="app-header__title">
+      <i data-lucide="calendar" style="width:20px;height:20px;"></i>
+      <span class="app-title-text">シフト希望</span>
+    </div>
+
+    <!-- 共通ナビゲーション追加 -->
+    <nav class="app-header__nav" style="margin-left: 20px;">
+      <a href="index.html" class="app-header__link" style="color:var(--color-primary);font-weight:600;"><i data-lucide="calendar" style="width:16px;height:16px;"></i> 希望休</a>
+      <a href="generate.html" class="app-header__link"><i data-lucide="calendar-cog" style="width:16px;height:16px;"></i> シフト生成</a>
+      <a href="admin.html" class="app-header__link"><i data-lucide="palette" style="width:16px;height:16px;"></i> 設定</a>
+    </nav>
+
+    <div class="month-nav" style="margin: 0 auto;">
+      <button class="month-nav__btn" id="prev-month" aria-label="前月"><i data-lucide="chevron-left" style="width:18px;height:18px;"></i></button>
+      <span class="month-nav__label" id="month-label" title="クリックして月を選択" style="cursor: pointer; user-select: none;"></span>
+      <button class="month-nav__btn" id="next-month" aria-label="次月"><i data-lucide="chevron-right" style="width:18px;height:18px;"></i></button>
+      <button class="month-nav__today-btn" id="today-month-btn" title="今月に戻る" style="display:none;">今月へ戻る</button>
+    </div>
+
+    <nav class="app-header__nav">
+      <div class="legend--chips">
+        <div class="legend__item">
+          <span class="legend__dot legend__dot--virtual"></span>固定休
+        </div>
+        <div class="legend__item">
+          <span class="legend__dot legend__dot--off"></span>休み希望
+        </div>
+        <div class="legend__item">
+          <span class="legend__dot legend__dot--other"></span>コメント
+        </div>
+      </div>
+
+    </nav>
+  </header>
+
+  <!-- メインコンテナ -->
+  <div class="main-container">
+
+    <!-- ガントチャート（PC） -->
+    <div class="card-surface gantt-wrapper" id="gantt-wrapper" style="padding: 0; overflow-x: auto;">
+      <div style="overflow-x: auto;">
+        <table class="gantt-table" id="gantt-table">
+          <thead id="gantt-head"></thead>
+          <tbody id="gantt-body"></tbody>
+          <tfoot id="gantt-foot"></tfoot>
+        </table>
+      </div>
+    </div>
+
+    <!-- カレンダー（スマホ） -->
+    <div class="calendar-wrapper" id="calendar-wrapper">
+      <div class="staff-chips" id="staff-chips"></div>
+      <div class="calendar-grid" id="calendar-grid"></div>
+    </div>
+
+    <!-- その他リスト -->
+    <div class="other-list" id="other-list"></div>
+  </div>
+
+  <!-- 登録・編集モーダル -->
+  <div class="modal-overlay" id="modal-overlay">
+    <div class="modal">
+      <h3 class="modal__title" id="modal-title">希望を登録</h3>
+      <div class="modal__field">
+        <span class="modal__label">スタッフ</span>
+        <select id="modal-staff-select" class="input-field"></select>
+      </div>
+      <div class="modal__field" id="modal-dates-field">
+        <span class="modal__label">対象日</span>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <input type="date" id="modal-date-start" class="input-field" style="padding: 6px; font-family: inherit;">
+          <span>〜</span>
+          <input type="date" id="modal-date-end" class="input-field" style="padding: 6px; font-family: inherit;">
+        </div>
+      </div>
+      <div class="modal__field">
+        <span class="modal__label">種類</span>
+        <div class="modal__radio-group">
+          <label class="modal__radio-label">
+            <input type="radio" name="request-type" value="off" checked>
+            <span class="radio-dot radio-dot--off"></span> 休み希望
+          </label>
+          <label class="modal__radio-label">
+            <input type="radio" name="request-type" value="other">
+            <span class="radio-dot radio-dot--other"></span> コメント
+          </label>
+        </div>
+      </div>
+      <div class="modal__field">
+        <span class="modal__label">備考</span>
+        <textarea id="modal-note" class="input-field" rows="2" placeholder="午前だけ出勤可能、など"></textarea>
+      </div>
+      <div class="modal__history" id="modal-history" style="display:none;margin-top:16px;padding-top:16px;border-top:1px dashed var(--color-border);">
+        <span class="modal__label" style="font-size:0.75rem;">変更履歴</span>
+        <ul class="modal__history-list" id="modal-history-list" style="list-style:none;font-size:var(--font-size-xs);color:var(--color-text-secondary);gap:4px;display:flex;flex-direction:column;"></ul>
+      </div>
+      <div class="modal__actions">
+        <button class="btn btn--danger" id="modal-delete" style="display:none;">削除</button>
+        <div style="flex:1"></div>
+        <button class="btn btn--outline" id="modal-cancel">キャンセル</button>
+        <button class="btn btn--primary" id="modal-save">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ボトムシート（日付詳細・スマホ） -->
+  <div class="bottom-sheet-overlay" id="bottom-sheet-overlay">
+    <div class="bottom-sheet" id="bottom-sheet">
+      <div class="bottom-sheet__handle"></div>
+      <div class="bottom-sheet__header">
+        <span class="bottom-sheet__title" id="bottom-sheet-title"></span>
+        <button class="bottom-sheet__close" id="bottom-sheet-close" aria-label="閉じる">
+          <i data-lucide="x" style="width:16px;height:16px;"></i>
+        </button>
+      </div>
+      <div class="bottom-sheet__body" id="bottom-sheet-body"></div>
+    </div>
+  </div>
+
+  <!-- FAB（スマホ用・スタッフ選択時に表示） -->
+  <button class="fab" id="fab-add" aria-label="今日の希望を登録" style="display:none;">
+    <i data-lucide="plus" style="width:24px;height:24px;"></i>
+  </button>
+
+  <!-- 月選択モーダル -->
+  <div class="month-picker-overlay" id="month-picker-overlay" style="display:none;">
+    <div class="month-picker-modal" id="month-picker-modal">
+      <div class="month-picker__header">
+        <button class="month-picker__year-btn" id="picker-prev-year">&#8249;</button>
+        <span class="month-picker__year" id="picker-year-label"></span>
+        <button class="month-picker__year-btn" id="picker-next-year">&#8250;</button>
+      </div>
+      <div class="month-picker__grid" id="picker-month-grid"></div>
+      <div class="month-picker__footer">
+        <button class="btn btn--outline btn--sm" id="picker-cancel">キャンセル</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- トースト -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <!-- Supabase CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script type="module" src="js/main.js"></script>
+  <script>lucide.createIcons();</script>
+</body>
+</html>
