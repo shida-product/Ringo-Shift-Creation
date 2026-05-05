@@ -108,12 +108,12 @@ INSERT INTO monthly_settings (year_month, employee_days_off) VALUES
 -- スタッフ（薬剤師 4名）
 INSERT INTO staff (employee_no, name, display_order, role, staff_type, work_conditions) VALUES
   ('01', '鈴木怜那',   1, 'pharmacist', 'special',  '{}'),
-  ('02', '福島真依子', 2, 'pharmacist', 'employee', '{}'),
-  ('03', '湯本有美子', 3, 'pharmacist', 'employee', '{}'),
-  ('04', '服部孝子',   4, 'pharmacist', 'employee', '{}');
+  ('06', '福島真依子', 2, 'pharmacist', 'employee', '{}'),
+  ('07', '湯本有美子', 3, 'pharmacist', 'employee', '{}'),
+  ('08', '服部孝子',   4, 'pharmacist', 'employee', '{}');
 
 -- スタッフ（事務 3名）
 INSERT INTO staff (employee_no, name, display_order, role, staff_type, work_conditions) VALUES
-  ('05', '野口由美子',   5, 'office', 'part_time', '{}'),
-  ('06', '小野寺美桜子', 6, 'office', 'part_time', '{}'),
-  ('07', '笠原若菜',     7, 'office', 'part_time', '{}');
+  ('15', '野口由美子',   5, 'office', 'part_time', '{}'),
+  ('17', '小野寺美桜子', 6, 'office', 'part_time', '{}'),
+  ('19', '笠原若菜',     7, 'office', 'part_time', '{}');
