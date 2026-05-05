@@ -19,12 +19,9 @@ CREATE TABLE staff (
   name TEXT NOT NULL,
   display_order INTEGER NOT NULL DEFAULT 0,
   is_active BOOLEAN NOT NULL DEFAULT TRUE,
-  -- M2追加カラム
   role TEXT NOT NULL DEFAULT 'office' CHECK (role IN ('pharmacist', 'office')),
   staff_type TEXT NOT NULL DEFAULT 'part_time' CHECK (staff_type IN ('special', 'employee', 'part_time', 'external')),
-  assigned_store TEXT NOT NULL DEFAULT 'both' CHECK (assigned_store IN ('ebisu', 'shibuya', 'both')),
   work_conditions JSONB DEFAULT '{}',
-  store_priority JSONB DEFAULT '{}',
   -- タイムスタンプ
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -108,21 +105,15 @@ INSERT INTO monthly_settings (year_month, employee_days_off) VALUES
   ('2026-09', 9),  ('2026-10', 9), ('2026-11', 10), ('2026-12', 10),
   ('2027-01', 10), ('2027-02', 9), ('2027-03', 10), ('2027-04', 10);
 
--- スタッフ（薬剤師）
-INSERT INTO staff (employee_no, name, display_order, role, staff_type, assigned_store, work_conditions, store_priority) VALUES
-  ('01', '村上正樹',   1, 'pharmacist', 'special',   'both',    '{}', '{}'),
-  ('05', '信太和人',   2, 'pharmacist', 'employee',  'shibuya', '{}', '{}'),
-  ('08', '小野夏海',   3, 'pharmacist', 'employee',  'ebisu',   '{}', '{}'),
-  ('03', '徳永麻衣子', 4, 'pharmacist', 'part_time', 'both',    '{"target_days_per_month": 17, "max_days_per_month": 22, "max_sunday_per_month": 2}', '{}');
+-- スタッフ（薬剤師 4名）
+INSERT INTO staff (employee_no, name, display_order, role, staff_type, work_conditions) VALUES
+  ('01', '鈴木怜那',   1, 'pharmacist', 'special',  '{}'),
+  ('02', '福島真依子', 2, 'pharmacist', 'employee', '{}'),
+  ('03', '湯本有美子', 3, 'pharmacist', 'employee', '{}'),
+  ('04', '服部孝子',   4, 'pharmacist', 'employee', '{}');
 
--- スタッフ（事務）
-INSERT INTO staff (employee_no, name, display_order, role, staff_type, assigned_store, work_conditions, store_priority) VALUES
-  ('12', '木庭弥生',   5, 'office', 'part_time', 'both', '{"target_days_per_month": 17, "max_days_per_month": 22, "max_consecutive_days": 4}', '{"ebisu": 1, "shibuya": 4}'),
-  ('11', '中村かな子', 6, 'office', 'part_time', 'both', '{"target_days_per_month": 10, "max_days_per_month": 10, "alternating_weeks": [2, 3], "max_consecutive_days": 4}', '{"ebisu": 2, "shibuya": 3}'),
-  ('14', '諫早千佳',   7, 'office', 'part_time', 'both', '{"target_days_per_month": 13, "max_days_per_month": 17, "max_consecutive_days": 4}', '{"ebisu": 3, "shibuya": 1}'),
-  ('13', '本庄里帆',   8, 'office', 'part_time', 'both', '{"max_consecutive_days": 3}', '{"ebisu": 4, "shibuya": 2}');
-
--- スタッフ（別薬局：リスト掲載のみ、シフト生成対象外）
-INSERT INTO staff (employee_no, name, display_order, role, staff_type, assigned_store, work_conditions, store_priority) VALUES
-  ('60', '野口由美子', 9, 'office', 'external', 'both', '{}', '{}'),
-  ('61', '福島真依子', 10, 'office', 'external', 'both', '{}', '{}');
+-- スタッフ（事務 3名）
+INSERT INTO staff (employee_no, name, display_order, role, staff_type, work_conditions) VALUES
+  ('05', '野口由美子',   5, 'office', 'part_time', '{}'),
+  ('06', '小野寺美桜子', 6, 'office', 'part_time', '{}'),
+  ('07', '笠原若菜',     7, 'office', 'part_time', '{}');
