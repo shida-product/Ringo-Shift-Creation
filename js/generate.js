@@ -1312,11 +1312,18 @@ function generateShifts(yearMonth, manualOverrides, manualSet, randomize = false
       }
 
       if (shouldAssignYumoto) {
-        // 服部か鈴木がいる日のみ
-        const suzukiCanWork = suzuki && canWork(suzuki.id, dateStr) && dow !== 0 && dow !== 5;
+        // 服部か鈴木がいる日のみ。
+        // 上限2名のため、服部がいない場合は「鈴木が入る枠」が残っている必要がある。
         const hattoriWorks = result.some(a => a.staff_id === hattori?.id && a.date === dateStr);
-        if (hattoriWorks || suzukiCanWork) {
+        if (hattoriWorks) {
           assignPharm(yumoto, PATTERNS.PM_YUMOTO);
+        } else {
+          const suzukiCanWork = suzuki && canWork(suzuki.id, dateStr) && dow !== 0 && dow !== 5;
+          // すでに福島などが入っていて assignedPharm === 1 の場合、湯本を入れると上限2名になり
+          // 鈴木が入れずペアが組めなくなるため、assignedPharm === 0 の時のみ鈴木頼みでアサインする。
+          if (suzukiCanWork && assignedPharm === 0) {
+            assignPharm(yumoto, PATTERNS.PM_YUMOTO);
+          }
         }
       }
     }
