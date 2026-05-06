@@ -186,25 +186,33 @@
       submitBtn.innerHTML = 'ログイン中...';
       clearError();
 
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: email,
-        password: password,
-      });
+      try {
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email: email,
+          password: password,
+        });
 
-      if (error) {
-        showError('ログインに失敗しました。認証情報を確認してください。');
+        if (error) {
+          showError('ログインに失敗しました: ' + error.message);
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = 'ログイン <i data-lucide="arrow-right" style="width:18px;height:18px;margin-left:6px;"></i>';
+          lucide.createIcons();
+        } else {
+          // ログイン成功
+          submitBtn.style.background = 'var(--color-success)';
+          submitBtn.style.color = '#fff';
+          submitBtn.innerHTML = '認証成功 <i data-lucide="check" style="width:18px;height:18px;margin-left:6px;"></i>';
+          lucide.createIcons();
+          setTimeout(() => {
+            window.location.href = 'index.html';
+          }, 500);
+        }
+      } catch (err) {
+        console.error('Login exception:', err);
+        showError('システムエラーが発生しました。コンソールを確認してください。');
         submitBtn.disabled = false;
         submitBtn.innerHTML = 'ログイン <i data-lucide="arrow-right" style="width:18px;height:18px;margin-left:6px;"></i>';
         lucide.createIcons();
-      } else {
-        // ログイン成功
-        submitBtn.style.background = 'var(--color-success)';
-        submitBtn.style.color = '#fff';
-        submitBtn.innerHTML = '認証成功 <i data-lucide="check" style="width:18px;height:18px;margin-left:6px;"></i>';
-        lucide.createIcons();
-        setTimeout(() => {
-          window.location.href = 'index.html';
-        }, 500);
       }
     }
 
