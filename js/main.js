@@ -137,6 +137,12 @@ const state = {
 // 初期化
 // ============================================================
 document.addEventListener('DOMContentLoaded', async () => {
+  if (state.currentYear < 2026 || (state.currentYear === 2026 && state.currentMonth < 4)) {
+    state.currentYear = 2026; state.currentMonth = 4;
+  }
+  if (state.currentYear > 2026 || (state.currentYear === 2026 && state.currentMonth > 11)) {
+    state.currentYear = 2026; state.currentMonth = 11;
+  }
   bindEvents();
   await loadStaffList();
   updateHolidays();
@@ -160,8 +166,12 @@ function bindEvents() {
   document.getElementById('next-month').addEventListener('click', () => changeMonth(1));
   document.getElementById('today-month-btn').addEventListener('click', () => {
     const now = new Date();
-    state.currentYear = now.getFullYear();
-    state.currentMonth = now.getMonth();
+    let y = now.getFullYear();
+    let m = now.getMonth();
+    if (y < 2026 || (y === 2026 && m < 4)) { y = 2026; m = 4; }
+    if (y > 2026 || (y === 2026 && m > 11)) { y = 2026; m = 11; }
+    state.currentYear = y;
+    state.currentMonth = m;
     updateHolidays();
     renderMonth();
     loadRequests();
@@ -174,10 +184,12 @@ function bindEvents() {
     if (e.target === e.currentTarget) closeMonthPicker();
   });
   document.getElementById('picker-prev-year').addEventListener('click', () => {
+    if (pickerYear <= 2026) return;
     pickerYear--;
     renderMonthPickerGrid();
   });
   document.getElementById('picker-next-year').addEventListener('click', () => {
+    if (pickerYear >= 2026) return;
     pickerYear++;
     renderMonthPickerGrid();
   });
@@ -229,10 +241,12 @@ function renderMonthPickerGrid() {
   const grid = document.getElementById('picker-month-grid');
   grid.innerHTML = MONTH_LABELS.map((label, i) => {
     const isCurrent = (pickerYear === state.currentYear && i === state.currentMonth);
-    return `<button class="month-picker__month-btn${isCurrent ? ' is-current' : ''}" data-month="${i}">${label}</button>`;
+    const isDisabled = (pickerYear < 2026 || pickerYear > 2026 || (pickerYear === 2026 && i < 4));
+    const attr = isDisabled ? ' disabled style="opacity:0.3;cursor:not-allowed;"' : '';
+    return `<button class="month-picker__month-btn${isCurrent ? ' is-current' : ''}" data-month="${i}"${attr}>${label}</button>`;
   }).join('');
 
-  grid.querySelectorAll('.month-picker__month-btn').forEach(btn => {
+  grid.querySelectorAll('.month-picker__month-btn:not([disabled])').forEach(btn => {
     btn.addEventListener('click', () => {
       state.currentYear = pickerYear;
       state.currentMonth = parseInt(btn.dataset.month, 10);
@@ -459,9 +473,16 @@ function buildEffectiveRequests() {
 // ============================================================
 function changeMonth(delta) {
   closeBottomSheet();
-  state.currentMonth += delta;
-  if (state.currentMonth > 11) { state.currentMonth = 0; state.currentYear++; }
-  else if (state.currentMonth < 0) { state.currentMonth = 11; state.currentYear--; }
+  let nextYear = state.currentYear;
+  let nextMonth = state.currentMonth + delta;
+  if (nextMonth > 11) { nextMonth = 0; nextYear++; }
+  else if (nextMonth < 0) { nextMonth = 11; nextYear--; }
+  
+  if (nextYear < 2026 || (nextYear === 2026 && nextMonth < 4)) return;
+  if (nextYear > 2026 || (nextYear === 2026 && nextMonth > 11)) return;
+
+  state.currentYear = nextYear;
+  state.currentMonth = nextMonth;
   updateHolidays();
   renderMonth();
   loadRequests();
