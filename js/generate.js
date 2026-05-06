@@ -1615,7 +1615,7 @@ function renderGanttFooter(daysInMonth, sortedStaff) {
       cellClass = 'cell-warn';
     }
 
-    summaryRow += `<td class="${cellClass}">${getSpan(pharmCount, '薬')}/${getSpan(officeCount, '事')}</td>`;
+    summaryRow += `<td class="${cellClass}">${getSpan(pharmCount, '薬')}<br>${getSpan(officeCount, '事')}</td>`;
   }
 
   const summaryCol = '<td class="gantt-summary-col"></td>';
