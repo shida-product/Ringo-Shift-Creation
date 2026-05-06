@@ -94,7 +94,7 @@ const EXPECTED_PATTERNS = {
   '笠原': { 0: PATTERNS.SUN_CLEAN, 1: PATTERNS.FULL_CLEAN, 2: PATTERNS.FULL_CLEAN, 3: PATTERNS.FULL_CLEAN, 4: PATTERNS.FULL_CLEAN, 5: PATTERNS.FULL_CLEAN, 6: PATTERNS.AM_CLEAN },
   '福島': { 0: PATTERNS.SUN, 1: PATTERNS.AM, 2: PATTERNS.AM, 3: PATTERNS.AM, 4: PATTERNS.AM, 5: PATTERNS.AM, 6: PATTERNS.AM },
   '服部': { 0: PATTERNS.SUN, 1: PATTERNS.FULL, 2: PATTERNS.FULL, 3: PATTERNS.FULL, 4: PATTERNS.FULL, 5: PATTERNS.FULL, 6: PATTERNS.AM },
-  '湯本': { 0: PATTERNS.PM_YUMOTO, 1: PATTERNS.PM_YUMOTO, 2: PATTERNS.PM_YUMOTO, 3: PATTERNS.PM_YUMOTO, 4: PATTERNS.PM_YUMOTO, 5: PATTERNS.PM_YUMOTO, 6: PATTERNS.PM_YUMOTO },
+  '湯本': { 0: null, 1: PATTERNS.PM_YUMOTO, 2: PATTERNS.PM_YUMOTO, 3: PATTERNS.PM_YUMOTO, 4: PATTERNS.PM_YUMOTO, 5: PATTERNS.PM_YUMOTO, 6: PATTERNS.PM_YUMOTO },
   '鈴木': { 0: PATTERNS.SUN, 1: PATTERNS.FULL, 2: PATTERNS.FULL, 3: PATTERNS.FULL, 4: PATTERNS.FULL, 5: PATTERNS.FULL, 6: PATTERNS.AM }
 };
 
@@ -119,12 +119,6 @@ function getAvailablePatterns(staff, dateStr) {
     if (isYumoto) {
       patterns.push(PATTERNS.PM_YUMOTO);
     }
-  }
-
-  // 代表（鈴木さん）は「〇午前」「〇午後」の例外選択を許可
-  if (staff.name.includes('鈴木')) {
-    if (!patterns.includes(PATTERNS.AM)) patterns.push(PATTERNS.AM);
-    if (!patterns.includes(PATTERNS.PM)) patterns.push(PATTERNS.PM);
   }
 
   return patterns;
@@ -839,7 +833,7 @@ function runAllChecks(assignments, yearMonth) {
 
   // G2. 希望休反映
   let violations = 0;
-  const offRequests = state.requests.filter(r => r.request_type === 'off');
+  const offRequests = state.requests.filter(r => r.request_type === 'off' || r.request_type === 'other');
   for (const req of offRequests) {
     const assign = assignments.find(a => a.staff_id === req.staff_id && a.date === req.date);
     if (assign && assign.work_pattern && assign.work_pattern !== '') violations++;
@@ -874,9 +868,15 @@ function runAllChecks(assignments, yearMonth) {
     let expectedText = '指定の勤務パターン遵守';
     if (staffExpected) {
       const e = staffExpected;
+      const PATTERN_PREFIX = {
+        '〇午前': '①', '〇午前（掃除）': '②', '〇日曜': '③', '〇日曜（掃除）': '④',
+        '〇終日': '⑤', '終日（掃除）': '⑥', '湯本午後': '⑦', '〇午後': '⑧'
+      };
+      const withNum = (pat) => (PATTERN_PREFIX[pat] || '') + pat;
+
       const allSame = Object.values(e).every(v => v === e[0]);
       if (allSame) {
-        expectedText += `<br><span style="font-size:0.85em;color:var(--color-text-muted);font-weight:normal;display:block;margin-top:4px;">${e[0]}：全日</span>`;
+        expectedText += `<br><span style="font-size:0.85em;color:var(--color-text-muted);font-weight:normal;display:block;margin-top:4px;">${withNum(e[0])}：全日</span>`;
       } else {
         const groups = {};
         for(let i=0; i<7; i++) {
@@ -885,7 +885,7 @@ function runAllChecks(assignments, yearMonth) {
            groups[pat].push(i);
         }
         const formatDays = (days) => days.map(d => DAY_NAMES_JA[d]).join('・');
-        const parts = Object.entries(groups).map(([pat, days]) => `${pat}：${formatDays(days)}`);
+        const parts = Object.entries(groups).map(([pat, days]) => `${withNum(pat)}：${formatDays(days)}`);
         expectedText += `<br><span style="font-size:0.85em;color:var(--color-text-muted);font-weight:normal;display:block;margin-top:4px;line-height:1.4;">${parts.join('<br>')}</span>`;
       }
     }
@@ -894,7 +894,9 @@ function runAllChecks(assignments, yearMonth) {
       let violationCount = 0;
       workAssignments.forEach(a => {
         const dow = new Date(a.date + 'T00:00:00').getDay();
-        if (a.work_pattern && a.work_pattern !== staffExpected[dow]) {
+        const expected = staffExpected[dow];
+        if (expected === null) return; // 営業なし日（例：湯本の日曜）は除外
+        if (a.work_pattern && a.work_pattern !== expected) {
           violationCount++;
         }
       });
@@ -1110,7 +1112,7 @@ function generateShifts(yearMonth, manualOverrides, manualSet, randomize = false
   function canWork(staffId, dateStr) {
     if (manualSet.has(`${staffId}_${dateStr}`)) return false;
     const req = requestMap[`${staffId}_${dateStr}`];
-    if (req && req.request_type === 'off') return false;
+    if (req && (req.request_type === 'off' || req.request_type === 'other')) return false;
     
     const staff = activeStaff.find(s => s.id === staffId);
     let maxConsecutive = staff?.name.includes('湯本') ? 2 : (staff?.work_conditions?.max_consecutive_days || 5);
@@ -1480,6 +1482,14 @@ function renderGantt() {
       let cellContent = '';
       let cellClass = 'day-cell';
 
+      // 湯本さんの日曜は午後営業なし → 網掛けNGセル
+      const isYumotoSunday = staff.name.includes('湯本') && isSunday;
+      if (isYumotoSunday) {
+        cellClass += ' is-yumoto-closed';
+        bodyHtml += `<td class="${cellClass}" data-staff="${staff.id}" data-date="${dateStr}"></td>`;
+        continue;
+      }
+
       // 希望があればストライプクラス付与
       if (request) {
         if (request.is_virtual) {
@@ -1735,7 +1745,23 @@ function buildEditorOption(label, value, isActive) {
   } else {
     markerHtml = `<div class="pattern-marker" style="width:20px;height:20px;background:transparent;border:1px solid #ccc;margin:0;"></div>`;
   }
-  const displayLabel = label.replace(/^[○〇☆]/, '');
+
+  const PATTERN_PREFIX = {
+    '〇午前': '①',
+    '〇午前（掃除）': '②',
+    '〇日曜': '③',
+    '〇日曜（掃除）': '④',
+    '〇終日': '⑤',
+    '終日（掃除）': '⑥',
+    '湯本午後': '⑦',
+    '〇午後': '⑧'
+  };
+
+  let displayLabel = label.replace(/^[○〇☆]/, '');
+  if (PATTERN_PREFIX[label]) {
+    displayLabel = PATTERN_PREFIX[label] + displayLabel;
+  }
+
   return `<div class="cell-editor__option ${isActive ? 'is-active' : ''}" data-value="${escapeHtml(value || label)}">
     ${markerHtml}
     ${escapeHtml(displayLabel)}
