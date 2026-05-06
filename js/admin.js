@@ -54,6 +54,14 @@ let pendingColors = {};
 // 初期化
 // ============================================================
 document.addEventListener('DOMContentLoaded', async () => {
+  if (typeof supabase !== 'undefined') {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      window.location.href = 'login.html';
+      return;
+    }
+  }
+
   await loadStaff();
   
   const saveBtn = document.getElementById('save-colors-btn');

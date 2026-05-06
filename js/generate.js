@@ -283,6 +283,14 @@ function updateUndoRedoButtons() {
 // 初期化
 // ============================================================
 document.addEventListener('DOMContentLoaded', async () => {
+  if (typeof supabase !== 'undefined') {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      window.location.href = 'login.html';
+      return;
+    }
+  }
+
   if (state.currentYear < 2026 || (state.currentYear === 2026 && state.currentMonth < 4)) {
     state.currentYear = 2026; state.currentMonth = 4;
   }
