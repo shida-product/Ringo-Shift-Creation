@@ -14,21 +14,21 @@ CREATE POLICY "Allow access to Ringo user on ringo_staff"
 ON ringo_staff
 FOR ALL
 TO authenticated
-USING ( auth.jwt() ->> 'email' = 'ringo@example.com' )
-WITH CHECK ( auth.jwt() ->> 'email' = 'ringo@example.com' );
+USING ( auth.jwt() ->> 'email' = 'ringo@shift.com' )
+WITH CHECK ( auth.jwt() ->> 'email' = 'ringo@shift.com' );
 
 -- ringo_shift_requests テーブルへのポリシー
 CREATE POLICY "Allow access to Ringo user on ringo_shift_requests"
 ON ringo_shift_requests
 FOR ALL
 TO authenticated
-USING ( auth.jwt() ->> 'email' = 'ringo@example.com' )
-WITH CHECK ( auth.jwt() ->> 'email' = 'ringo@example.com' );
+USING ( auth.jwt() ->> 'email' = 'ringo@shift.com' )
+WITH CHECK ( auth.jwt() ->> 'email' = 'ringo@shift.com' );
 
 -- ringo_shift_assignments テーブルへのポリシー
 CREATE POLICY "Allow access to Ringo user on ringo_shift_assignments"
 ON ringo_shift_assignments
 FOR ALL
 TO authenticated
-USING ( auth.jwt() ->> 'email' = 'ringo@example.com' )
-WITH CHECK ( auth.jwt() ->> 'email' = 'ringo@example.com' );
+USING ( auth.jwt() ->> 'email' = 'ringo@shift.com' )
+WITH CHECK ( auth.jwt() ->> 'email' = 'ringo@shift.com' );
