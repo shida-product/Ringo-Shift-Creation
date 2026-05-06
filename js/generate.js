@@ -19,16 +19,18 @@ const DAY_NAMES = ['日', '月', '火', '水', '木', '金', '土'];
 const REQUEST_TYPE_LABEL = {
   off: '休み希望',
   other: 'コメント等',
+  virtual: '固定休',
 };
 
 // リクエスト種別 → ストライプCSSクラス
 const REQUEST_TYPE_CSS = {
   off: 'bg-stripe-off',
   other: 'bg-stripe-other',
+  virtual: 'bg-stripe-virtual',
 };
 
 // リクエスト種別 → 絵文字アイコン
-const REQUEST_TYPE_ICON = { off: '🔴', other: '🟡' };
+const REQUEST_TYPE_ICON = { off: '🔴', other: '🟡', virtual: '⚪' };
 
 // CSV出力時に「平日」として扱うリクエスト種別（それ以外は「所定休日」）
 const CSV_WEEKDAY_REQUEST_TYPES = [];
@@ -54,6 +56,19 @@ const PATTERN_CSS = {
   'りんご': 'pattern-marker--ringo', // 既存の特殊パターン
   '出張': 'pattern-marker--other',
   '応援': 'pattern-marker--other',
+};
+
+const PATTERN_DOT_CLASS = {
+  '〇午前': 'legend__dot--am',
+  '〇午前（掃除）': 'legend__dot--am',
+  '〇日曜': 'legend__dot--sun',
+  '〇日曜（掃除）': 'legend__dot--sun',
+  '〇終日': 'legend__dot--full',
+  '終日（掃除）': 'legend__dot--full',
+  '湯本午後': 'legend__dot--pm',
+  'りんご': 'legend__dot--ringo',
+  '出張': 'legend__dot--other',
+  '応援': 'legend__dot--other',
 };
 
 const PATTERN_LABEL = {
@@ -470,21 +485,78 @@ function renderOtherList() {
 // データ取得
 // ============================================================
 async function loadData() {
-  // DB接続をオフにするため、ローカルでハードコードしたデータを使用
-  state.staffList = [
-    { id: 'ringo-1', name: '鈴木 怜那', role: 'pharmacist', display_order: 1, is_active: true },
-    { id: 'ringo-3', name: '福島 真依子', role: 'pharmacist', display_order: 2, is_active: true },
-    { id: 'ringo-4', name: '湯本 有美子', role: 'pharmacist', display_order: 3, is_active: true },
-    { id: 'ringo-5', name: '服部 孝子', role: 'pharmacist', display_order: 4, is_active: true },
-    { id: 'ringo-101', name: '野口 由美子', role: 'office', display_order: 5, is_active: true },
-    { id: 'ringo-102', name: '小野寺 美桜子', role: 'office', display_order: 6, is_active: true },
-    { id: 'ringo-103', name: '笠原 若菜', role: 'office', display_order: 7, is_active: true }
-  ];
+  const { data, error } = await supabase
+    .from('ringo_staff')
+    .select('*')
+    .eq('is_active', true)
+    .order('display_order', { ascending: true });
+
+  if (error) {
+    console.error('Error loading staff:', error);
+    state.staffList = [];
+    return;
+  }
+  state.staffList = data || [];
 }
 
 async function loadRequests(yearMonth) {
-  // DB通信オフ
-  return [];
+  const [year, month] = yearMonth.split('-');
+  const startDateStr = `${year}-${month}-01`;
+  const endDateStr = new Date(year, parseInt(month), 0).toISOString().split('T')[0];
+
+  const { data, error } = await supabase
+    .from('ringo_shift_requests')
+    .select('*')
+    .gte('date', startDateStr)
+    .lte('date', endDateStr);
+
+  if (error) {
+    console.error('Error loading requests:', error);
+    return [];
+  }
+  
+  const dbRequests = data || [];
+  return buildEffectiveRequests(year, parseInt(month), dbRequests);
+}
+
+function buildEffectiveRequests(year, month, dbRequests) {
+  const effective = [...dbRequests];
+  const realReqMap = new Set();
+  effective.forEach(r => realReqMap.add(`${r.staff_id}_${r.date}`));
+
+  // 取得済みの期間に対して固定休みを合成
+  const startDateObj = new Date(year, month - 1, 1);
+  const endDateObj = new Date(year, month, 0);
+
+  const fixedOffRules = {};
+  state.staffList.forEach(s => {
+    if (s.name.includes('野口'))     fixedOffRules[s.id] = [0, 1];       // 日(0)・月(1)休み
+    else if (s.name.includes('小野寺')) fixedOffRules[s.id] = [3, 6];    // 水(3)・土(6)休み
+    else if (s.name.includes('笠原'))   fixedOffRules[s.id] = [2, 3, 4, 5, 6]; // 火(2)〜土(6)休み
+    else if (s.name.includes('鈴木'))   fixedOffRules[s.id] = [0, 5];    // 日(0)・金(5)休み
+    else if (s.name.includes('服部'))   fixedOffRules[s.id] = [1, 2];    // 月(1)・火(2)休み
+  });
+
+  for (let d = new Date(startDateObj); d <= endDateObj; d.setDate(d.getDate() + 1)) {
+    const dow = d.getDay();
+    const dateStr = formatDate(d);
+
+    for (const [staffId, offDays] of Object.entries(fixedOffRules)) {
+      if (offDays.includes(dow)) {
+        if (!realReqMap.has(`${staffId}_${dateStr}`)) {
+          effective.push({
+            staff_id: staffId,
+            date: dateStr,
+            request_type: 'off',
+            note: '固定休',
+            is_virtual: true
+          });
+        }
+      }
+    }
+  }
+
+  return effective;
 }
 
 async function loadExistingAssignments() {
@@ -493,8 +565,18 @@ async function loadExistingAssignments() {
   // 描画のための希望休データを先にロード
   state.requests = await loadRequests(yearMonth);
 
-  // DB通信オフのため、初期値は空
-  state.assignments = [];
+  const { data, error } = await supabase
+    .from('ringo_shift_assignments')
+    .select('*')
+    .eq('year_month', yearMonth);
+
+  if (error) {
+    console.error('Error loading assignments:', error);
+    state.assignments = [];
+  } else {
+    state.assignments = data || [];
+  }
+
   if (state.assignments.length > 0) {
     state.hasGenerated = true;
     document.getElementById('btn-csv').disabled = false;
@@ -833,7 +915,7 @@ function runAllChecks(assignments, yearMonth) {
       items.push({
         id: `${staff.id}-fixed-off`, tag: '絶対',
         status: violations === 0 ? 'pass' : 'fail',
-        text: `固定休（${offLabel}）に出勤していない`,
+        text: `固定休：${offLabel}`,
         value: violations === 0 ? '○' : `${violations}日違反`,
         scoreDelta: violations > 0 ? -200 * violations : 0
       });
@@ -1166,8 +1248,37 @@ function generateShifts(yearMonth, manualOverrides, manualSet, randomize = false
 // DB保存
 // ============================================================
 async function saveAssignments(yearMonth, assignments) {
-  // DB接続をオフにしているため、保存処理をスキップ
-  console.log(`[Mock] saveAssignments called for ${yearMonth} with ${assignments.length} assignments.`);
+  const { error: delError } = await supabase
+    .from('ringo_shift_assignments')
+    .delete()
+    .eq('year_month', yearMonth);
+
+  if (delError) {
+    console.error('Error deleting old assignments:', delError);
+    return false;
+  }
+
+  if (assignments.length === 0) return true;
+
+  const insertData = assignments.map(a => ({
+    year_month: yearMonth,
+    staff_id: a.staff_id,
+    date: a.date,
+    attendance_type: a.attendance_type,
+    work_pattern: a.work_pattern,
+    is_manual_override: a.is_manual_override || false
+  }));
+
+  const { error: insError } = await supabase
+    .from('ringo_shift_assignments')
+    .insert(insertData);
+
+  if (insError) {
+    console.error('Error saving assignments:', insError);
+    return false;
+  }
+  
+  return true;
 }
 
 // ============================================================
@@ -1268,8 +1379,12 @@ function renderGantt() {
       let cellClass = 'day-cell';
 
       // 希望があればストライプクラス付与
-      if (request && REQUEST_TYPE_CSS[request.request_type]) {
-        cellClass += ` ${REQUEST_TYPE_CSS[request.request_type]}`;
+      if (request) {
+        if (request.is_virtual) {
+          cellClass += ' bg-stripe-virtual';
+        } else if (REQUEST_TYPE_CSS[request.request_type]) {
+          cellClass += ` ${REQUEST_TYPE_CSS[request.request_type]}`;
+        }
       }
 
       if (staff.staff_type === 'external') {
@@ -1282,8 +1397,7 @@ function renderGantt() {
       if (pattern && PATTERN_CSS[pattern]) {
         const cssClass = PATTERN_CSS[pattern];
         const label = PATTERN_LABEL[pattern] || pattern;
-        const role = staff.role || '';
-        cellContent = `<div class="pattern-marker ${cssClass}" data-role="${role}">${label}</div>`;
+        cellContent = `<div class="pattern-marker ${cssClass}">${label}</div>`;
       } else if (pattern) {
         // 特殊パターン（りんご、出張等）
         cellContent = `<div class="pattern-marker pattern-marker--special">${escapeHtml(pattern.substring(0, 2))}</div>`;
@@ -1366,15 +1480,19 @@ function renderGanttFooter(daysInMonth, sortedStaff) {
     });
 
     function getSpan(val, role) {
-      if (val >= 1) return `${role}${val}`;
-      return `<span class="count-ng">${role}${val}</span>`;
+      if (val === 0) return `<span class="count-ng">${role}${val}</span>`;
+      if (role === '薬' && val === 1) return `<span class="count-warn">${role}${val}</span>`;
+      return `${role}${val}`;
     }
 
-    // 薬剤師は平日1名、土日は2名、火曜は2名目標等だが、全体として0名ならNG
-    const isOk = pharmCount > 0 && officeCount > 0;
-    const cellClass = isOk ? '' : ' cell-ng';
+    let cellClass = '';
+    if (pharmCount === 0 || officeCount === 0) {
+      cellClass = 'cell-ng';
+    } else if (pharmCount === 1) {
+      cellClass = 'cell-warn';
+    }
 
-    summaryRow += `<td class="${cellClass.trim()}">${getSpan(pharmCount, '薬')}/${getSpan(officeCount, '事')}</td>`;
+    summaryRow += `<td class="${cellClass}">${getSpan(pharmCount, '薬')}/${getSpan(officeCount, '事')}</td>`;
   }
 
   const summaryCol = '<td class="gantt-summary-col"></td>';
@@ -1475,23 +1593,18 @@ function openCellEditor(cell, staff, dateStr) {
 
       // DB更新
       try {
-        // DB接続をオフにしているため、オンメモリで配列を操作する
-        const existingAssign = state.assignments.find(a => a.staff_id === staff.id && a.date === dateStr);
-        if (existingAssign) {
-          existingAssign.attendance_type = newAttendance;
-          existingAssign.work_pattern = newPattern;
-          existingAssign.is_manual_override = true;
-        } else {
-          state.assignments.push({
-            id: 'mock-assign-' + Date.now(),
+        const { error } = await supabase
+          .from('ringo_shift_assignments')
+          .upsert({
             year_month: getCurrentYearMonth(),
             staff_id: staff.id,
             date: dateStr,
             attendance_type: newAttendance,
             work_pattern: newPattern,
-            is_manual_override: true,
-          });
-        }
+            is_manual_override: true
+          }, { onConflict: 'staff_id, date' });
+
+        if (error) throw error;
         showToast('更新しました', 'success');
       } catch (err) {
         console.error(err);
@@ -1512,28 +1625,19 @@ function openCellEditor(cell, staff, dateStr) {
 }
 
 function buildEditorOption(label, value, isActive) {
-  const dotColor = PATTERN_CSS[label]
-    ? `background:${getComputedPatternColor(label)}`
-    : (value === '所定休日' ? 'background:#dfe6e9' : 'background:transparent;border:1px solid #ccc');
-  const displayLabel = label.replace(/^[○◯☆]/, '');
+  let markerHtml = '';
+  if (PATTERN_CSS[label]) {
+    markerHtml = `<div class="pattern-marker ${PATTERN_CSS[label]}" style="width:20px;height:20px;font-size:0.45rem;margin:0;">${PATTERN_LABEL[label] || label.substring(0,2)}</div>`;
+  } else if (value === '所定休日') {
+    markerHtml = `<div class="pattern-marker pattern-marker--off" style="width:20px;height:20px;font-size:0.45rem;margin:0;">休</div>`;
+  } else {
+    markerHtml = `<div class="pattern-marker" style="width:20px;height:20px;background:transparent;border:1px solid #ccc;margin:0;"></div>`;
+  }
+  const displayLabel = label.replace(/^[○〇☆]/, '');
   return `<div class="cell-editor__option ${isActive ? 'is-active' : ''}" data-value="${escapeHtml(value || label)}">
-    <span class="cell-editor__option-dot" style="${dotColor}"></span>
+    ${markerHtml}
     ${escapeHtml(displayLabel)}
   </div>`;
-}
-
-function getComputedPatternColor(pattern) {
-  const colors = {
-    '〇午前': '#4caf50',
-    '〇午前（掃除）': '#4caf50',
-    '〇日曜': '#ff9800',
-    '〇日曜（掃除）': '#ff9800',
-    '〇終日': '#2196f3',
-    '終日（掃除）': '#2196f3',
-    '湯本午後': '#9c27b0',
-    'りんご': '#e91e63'
-  };
-  return colors[pattern] || '#ccc';
 }
 
 // ============================================================

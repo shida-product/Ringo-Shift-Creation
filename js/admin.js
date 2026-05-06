@@ -69,22 +69,18 @@ document.addEventListener('DOMContentLoaded', async () => {
 // データ取得
 // ============================================================
 async function loadStaff() {
-  // DB接続オフのためハードコードした7名を使用
-  staffList = [
-    { id: 'ringo-1', name: '鈴木 怜那', role: 'pharmacist', display_order: 1, is_active: true },
-    { id: 'ringo-3', name: '福島 真依子', role: 'pharmacist', display_order: 2, is_active: true },
-    { id: 'ringo-4', name: '湯本 有美子', role: 'pharmacist', display_order: 3, is_active: true },
-    { id: 'ringo-5', name: '服部 孝子', role: 'pharmacist', display_order: 4, is_active: true },
-    { id: 'ringo-101', name: '野口 由美子', role: 'office', display_order: 5, is_active: true },
-    { id: 'ringo-102', name: '小野寺 美桜子', role: 'office', display_order: 6, is_active: true },
-    { id: 'ringo-103', name: '笠原 若菜', role: 'office', display_order: 7, is_active: true }
-  ];
+  const { data, error } = await supabase
+    .from('ringo_staff')
+    .select('*')
+    .order('display_order', { ascending: true });
 
-  // localStorageの無効化状態を復元
-  const inactiveIds = JSON.parse(localStorage.getItem('inactiveStaffIds') || '[]');
-  staffList.forEach(s => {
-    if (inactiveIds.includes(s.id)) s.is_active = false;
-  });
+  if (error) {
+    console.error('Error loading staff:', error);
+    showToast('スタッフ一覧の取得に失敗しました', 'error');
+    return;
+  }
+  
+  staffList = data || [];
 
   const savedColors = JSON.parse(localStorage.getItem('staffColors') || '{}');
   staffList.forEach(staff => {
@@ -186,15 +182,24 @@ window.changeColor = function (staffName, colorVal) {
 // ============================================================
 // スタッフ有効/無効トグル
 // ============================================================
-window.toggleActive = function (staffId) {
+window.toggleActive = async function (staffId) {
   const staff = staffList.find(s => s.id === staffId);
   if (!staff) return;
-  staff.is_active = !staff.is_active;
+  
+  const newActiveState = !staff.is_active;
 
-  // 無効IDリストを localStorage に保存
-  const inactiveIds = staffList.filter(s => !s.is_active).map(s => s.id);
-  localStorage.setItem('inactiveStaffIds', JSON.stringify(inactiveIds));
+  const { error } = await supabase
+    .from('ringo_staff')
+    .update({ is_active: newActiveState })
+    .eq('id', staffId);
 
+  if (error) {
+    console.error('Error updating staff state:', error);
+    showToast('状態の更新に失敗しました', 'error');
+    return;
+  }
+
+  staff.is_active = newActiveState;
   showToast(staff.is_active ? `${staff.name} を有効化しました` : `${staff.name} を無効化しました`, 'success');
   renderStaffList();
 };

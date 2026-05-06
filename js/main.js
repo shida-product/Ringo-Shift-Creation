@@ -1,4 +1,4 @@
-﻿/**
+/**
  * シフト希望 メイン画面ロジック
  * - ガントチャート（PC）：ドラッグ→モーダル確認→登録
  * - カレンダー（スマホ）
@@ -372,22 +372,36 @@ function setupGanttHover() {
 // データ取得
 // ============================================================
 async function loadStaffList() {
-  // 元のオオギ薬局DBから取得する代わりに、りんごちゃん薬局の指定7名をハードコード
-  state.staffList = [
-    { id: 'ringo-1', name: '鈴木 怜那', role: 'pharmacist', display_order: 1 },
-    { id: 'ringo-3', name: '福島 真依子', role: 'pharmacist', display_order: 2 },
-    { id: 'ringo-4', name: '湯本 有美子', role: 'pharmacist', display_order: 3 },
-    { id: 'ringo-5', name: '服部 孝子', role: 'pharmacist', display_order: 4 },
-    { id: 'ringo-101', name: '野口 由美子', role: 'office', display_order: 5 },
-    { id: 'ringo-102', name: '小野寺 美桜子', role: 'office', display_order: 6 },
-    { id: 'ringo-103', name: '笠原 若菜', role: 'office', display_order: 7 }
-  ];
+  const { data, error } = await supabase
+    .from('ringo_staff')
+    .select('*')
+    .eq('is_active', true)
+    .order('display_order', { ascending: true });
+
+  if (error) {
+    console.error('Error loading staff:', error);
+    state.staffList = [];
+    return;
+  }
+  state.staffList = data || [];
 }
 
 async function loadRequests() {
-  // UI調整完了まではDBから取得せず、現在のメモリ上の状態を維持する（初期は空）
-  // 実際には何もせずに描画処理へ進む
-  if (!state.requests) state.requests = [];
+  const startDateStr = formatDate(new Date(state.currentYear, state.currentMonth - 1, 1));
+  const endDateStr = formatDate(new Date(state.currentYear, state.currentMonth + 2, 0));
+
+  const { data, error } = await supabase
+    .from('ringo_shift_requests')
+    .select('id, staff_id, date, request_type, note, created_at, updated_at')
+    .gte('date', startDateStr)
+    .lte('date', endDateStr);
+
+  if (error) {
+    console.error('Error loading requests:', error);
+    state.requests = [];
+  } else {
+    state.requests = data || [];
+  }
   
   buildEffectiveRequests();
   renderGantt();
@@ -1087,24 +1101,21 @@ async function handleModalSave() {
     currDt.setDate(currDt.getDate() + 1);
   }
 
-  // DB接続をオフにしているため、オンメモリで配列を操作する
-  for (const d of targetDates) {
-    const existingReqIndex = state.requests.findIndex(r => r.staff_id === staffId && r.date === d);
-    
-    if (existingReqIndex !== -1) {
-      // Update
-      state.requests[existingReqIndex].request_type = type;
-      state.requests[existingReqIndex].note = note || null;
-    } else {
-      // Insert
-      state.requests.push({
-        id: 'mock-id-' + Date.now() + Math.floor(Math.random() * 1000), // 仮のID
-        staff_id: staffId,
-        date: d,
-        request_type: type,
-        note: note || null
-      });
-    }
+  const upsertData = targetDates.map(d => ({
+    staff_id: staffId,
+    date: d,
+    request_type: type,
+    note: note || null
+  }));
+
+  const { error } = await supabase
+    .from('ringo_shift_requests')
+    .upsert(upsertData, { onConflict: 'staff_id, date' });
+
+  if (error) {
+    console.error('Error saving requests:', error);
+    alert('保存に失敗しました。');
+    return;
   }
 
   closeModal();
@@ -1133,8 +1144,16 @@ async function handleModalDelete() {
   const label = deleteDates.length === 1 ? 'この希望を削除しますか？' : `${deleteDates.length}日分の希望をまとめて削除しますか？`;
   if (!confirm(label)) return;
 
-  // DB接続をオフにしているため、オンメモリの配列から削除する
-  state.requests = state.requests.filter(r => !deleteIds.includes(r.id));
+  const { error } = await supabase
+    .from('ringo_shift_requests')
+    .delete()
+    .in('id', deleteIds);
+
+  if (error) {
+    console.error('Error deleting requests:', error);
+    alert('削除に失敗しました。');
+    return;
+  }
 
   closeModal();
   await loadRequests();

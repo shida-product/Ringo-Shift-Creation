@@ -258,41 +258,52 @@
   line-height: 1;
 }
 
-/* ━━ 恵比寿（青系）━━ */
-.pattern-marker--employee-ebisu,
-.pattern-marker--part-ebisu {
-  background: #2D4FBF;
+/* ━━ 午前 ━━ */
+.pattern-marker--am {
+  background: #10b981;
   color: #fff;
 }
-
-/* ━━ 渋谷（フルタイム、ピンク系）━━ */
-.pattern-marker--employee-shibuya,
-.pattern-marker--part-shibuya {
-  background: #E879A8;
-  color: #fff;
-}
-
-/* ━━ 半日出勤（AM可/PM可対応）：店舗カラーをそのまま使用、内側ダッシュ枠でフルタイムと区別━━ */
-.pattern-marker--pm-part-shibuya,
-.pattern-marker--am-part-shibuya {
-  background: #E879A8;  /* 渋谷フルカラー */
+.pattern-marker--am-clean {
+  background: #10b981;
   color: #fff;
   outline: 2px dashed rgba(255,255,255,0.55);
   outline-offset: -4px;
 }
 
-.pattern-marker--am-part-ebisu,
-.pattern-marker--pm-part-ebisu {
-  background: #2D4FBF;  /* 恵比寿フルカラー */
+/* ━━ 日曜 ━━ */
+.pattern-marker--sun {
+  background: #f43f5e;
+  color: #fff;
+}
+.pattern-marker--sun-clean {
+  background: #f43f5e;
   color: #fff;
   outline: 2px dashed rgba(255,255,255,0.55);
   outline-offset: -4px;
 }
 
-/* 開発 */
-.pattern-marker--dev {
-  background: #ffeaa7;
-  color: #6c5000;
+/* ━━ 終日 ━━ */
+.pattern-marker--full {
+  background: #3b82f6;
+  color: #fff;
+}
+.pattern-marker--full-clean {
+  background: #3b82f6;
+  color: #fff;
+  outline: 2px dashed rgba(255,255,255,0.55);
+  outline-offset: -4px;
+}
+
+/* ━━ 湯本午後 ━━ */
+.pattern-marker--pm-yumoto {
+  background: #f59e0b;
+  color: #fff;
+}
+
+/* ━━ その他（出張・応援） ━━ */
+.pattern-marker--other {
+  background: #8b5cf6;
+  color: #fff;
 }
 
 /* 休日 */
@@ -358,6 +369,15 @@ tr.is-group-divider td {
     transparent 3px,
     rgba(244, 63, 94, 0.45) 3px,
     rgba(244, 63, 94, 0.45) 6px
+  ) !important;
+}
+.bg-stripe-virtual {
+  background: repeating-linear-gradient(
+    -45deg,
+    transparent,
+    transparent 4px,
+    rgba(255, 128, 128, 0.25) 4px,
+    rgba(255, 128, 128, 0.25) 8px
   ) !important;
 }
 .bg-stripe-am {
