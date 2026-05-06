@@ -107,7 +107,9 @@ function getAvailablePatterns(staff, dateStr) {
   if (staffExpected && dateStr) {
     const dow = new Date(dateStr + 'T00:00:00').getDay();
     const pattern = staffExpected[dow];
-    patterns.push(pattern);
+    if (pattern !== null && pattern !== undefined) {
+      patterns.push(pattern);
+    }
   } else {
     // 日付指定がない場合のフォールバック
     const isYumoto = staff.name.includes('湯本');
@@ -2101,7 +2103,7 @@ function renderConditionsCheck() {
       li.className = `condition-item condition-item--${status}`;
       const tagMap = { '絶対': 'absolute', '高': 'high', '中': 'mid', '低': 'low' };
       const tagClass = tag ? (tagMap[tag] || tag.toLowerCase()) : '';
-      const tagHtml = tag ? `<span class="condition-item__tag condition-item__tag--${tagClass}">${tag}</span>` : '';
+      const tagHtml = (tag && tag !== '絶対') ? `<span class="condition-item__tag condition-item__tag--${tagClass}">${tag}</span>` : '';
       li.innerHTML = `
         <span class="condition-item__icon">${icons[status]}</span>
         ${tagHtml}
