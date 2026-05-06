@@ -726,7 +726,14 @@ function renderCalendar() {
         const { bg, text } = getStaffColor(r.staff_id);
         const staffObj = state.staffList.find(s => s.id === r.staff_id);
         const fullName = staffObj?.name || r.staff?.name || '?';
-        const lastName = fullName.split(/[\s　]+/)[0];
+        let lastName = fullName;
+        if (fullName.includes(' ') || fullName.includes('　')) {
+          lastName = fullName.split(/[\s　]+/)[0];
+        } else if (fullName.startsWith('小野寺')) {
+          lastName = '小野寺';
+        } else {
+          lastName = fullName.substring(0, 2); // それ以外は先頭2文字を苗字とみなす
+        }
 
         let typeLabel = '';
         if (r.request_type !== 'off') {
@@ -899,7 +906,12 @@ function renderOtherList() {
   const endStr = formatDate(endDateObj);
 
   const filteredReqs = state.effectiveRequests
-    .filter(r => (r.request_type !== 'off' || (r.request_type === 'off' && r.note)) && r.date >= startStr && r.date <= endStr)
+    .filter(r => {
+      if (r.is_virtual) return false;
+      if (r.request_type === 'off' && (!r.note || r.note === '固定休')) return false;
+      if (r.request_type === 'off' && !r.note) return false;
+      return r.date >= startStr && r.date <= endStr;
+    })
     .sort((a, b) => {
       if (a.staff_id !== b.staff_id) return a.staff_id.localeCompare(b.staff_id);
       return a.date.localeCompare(b.date);
@@ -944,7 +956,14 @@ function renderOtherList() {
 
     const staffObj = state.staffList.find(s => s.id === g.staff_id);
     const fullName = staffObj?.name || g.staff?.name || '不明';
-    const lastName = fullName.split(/[\s　]+/)[0];
+    let lastName = fullName;
+    if (fullName.includes(' ') || fullName.includes('　')) {
+      lastName = fullName.split(/[\s　]+/)[0];
+    } else if (fullName.startsWith('小野寺')) {
+      lastName = '小野寺';
+    } else {
+      lastName = fullName.substring(0, 2);
+    }
     
     let typeLabel, itemCls;
     if (g.request_type === 'off') { typeLabel = '休み'; itemCls = 'other-list__item--off'; }

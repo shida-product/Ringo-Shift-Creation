@@ -294,8 +294,8 @@
   outline-offset: -4px;
 }
 
-/* ━━ 湯本午後 ━━ */
-.pattern-marker--pm-yumoto {
+/* ━━ 午後 ━━ */
+.pattern-marker--pm {
   background: #f59e0b;
   color: #fff;
 }

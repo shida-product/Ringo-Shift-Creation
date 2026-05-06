@@ -42,18 +42,20 @@ const PATTERNS = {
   SUN_CLEAN: '〇日曜（掃除）',// 08:50-12:30
   FULL: '〇終日',             // 09:00-18:30
   FULL_CLEAN: '終日（掃除）', // 08:50-18:30
+  PM: '〇午後',               // 午後のみ
   PM_YUMOTO: '湯本午後'       // 14:45-18:15
 };
 
 const PATTERN_CSS = {
   '〇午前': 'pattern-marker--am',
-  '〇午前（掃除）': 'pattern-marker--am-clean',
-  '〇日曜': 'pattern-marker--sun',
-  '〇日曜（掃除）': 'pattern-marker--sun-clean',
+  '〇午前（掃除）': 'pattern-marker--am',
+  '〇日曜': 'pattern-marker--am',
+  '〇日曜（掃除）': 'pattern-marker--am',
   '〇終日': 'pattern-marker--full',
-  '終日（掃除）': 'pattern-marker--full-clean',
-  '湯本午後': 'pattern-marker--pm-yumoto',
-  'りんご': 'pattern-marker--ringo', // 既存の特殊パターン
+  '終日（掃除）': 'pattern-marker--full',
+  '〇午後': 'pattern-marker--pm',
+  '湯本午後': 'pattern-marker--pm',
+  'りんご': 'pattern-marker--ringo',
   '出張': 'pattern-marker--other',
   '応援': 'pattern-marker--other',
 };
@@ -61,10 +63,11 @@ const PATTERN_CSS = {
 const PATTERN_DOT_CLASS = {
   '〇午前': 'legend__dot--am',
   '〇午前（掃除）': 'legend__dot--am',
-  '〇日曜': 'legend__dot--sun',
-  '〇日曜（掃除）': 'legend__dot--sun',
+  '〇日曜': 'legend__dot--am',
+  '〇日曜（掃除）': 'legend__dot--am',
   '〇終日': 'legend__dot--full',
   '終日（掃除）': 'legend__dot--full',
+  '〇午後': 'legend__dot--pm',
   '湯本午後': 'legend__dot--pm',
   'りんご': 'legend__dot--ringo',
   '出張': 'legend__dot--other',
@@ -73,31 +76,58 @@ const PATTERN_DOT_CLASS = {
 
 const PATTERN_LABEL = {
   '〇午前': '午前',
-  '〇午前（掃除）': '午(掃)',
-  '〇日曜': '日曜',
-  '〇日曜（掃除）': '日(掃)',
+  '〇午前（掃除）': '午前',
+  '〇日曜': '午前',
+  '〇日曜（掃除）': '午前',
   '〇終日': '終日',
-  '終日（掃除）': '終(掃)',
-  '湯本午後': '湯午後',
+  '終日（掃除）': '終日',
+  '〇午後': '午後',
+  '湯本午後': '午後',
   'りんご': 'り',
   '出張': '出張',
   '応援': '応援',
 };
 
-function getAvailablePatterns(staff) {
+const EXPECTED_PATTERNS = {
+  '野口': { 0: PATTERNS.SUN_CLEAN, 1: PATTERNS.FULL_CLEAN, 2: PATTERNS.FULL_CLEAN, 3: PATTERNS.FULL_CLEAN, 4: PATTERNS.FULL_CLEAN, 5: PATTERNS.FULL_CLEAN, 6: PATTERNS.AM_CLEAN },
+  '小野寺': { 0: PATTERNS.SUN_CLEAN, 1: PATTERNS.FULL_CLEAN, 2: PATTERNS.FULL_CLEAN, 3: PATTERNS.FULL_CLEAN, 4: PATTERNS.FULL_CLEAN, 5: PATTERNS.FULL_CLEAN, 6: PATTERNS.AM_CLEAN },
+  '笠原': { 0: PATTERNS.SUN_CLEAN, 1: PATTERNS.FULL_CLEAN, 2: PATTERNS.FULL_CLEAN, 3: PATTERNS.FULL_CLEAN, 4: PATTERNS.FULL_CLEAN, 5: PATTERNS.FULL_CLEAN, 6: PATTERNS.AM_CLEAN },
+  '福島': { 0: PATTERNS.SUN, 1: PATTERNS.AM, 2: PATTERNS.AM, 3: PATTERNS.AM, 4: PATTERNS.AM, 5: PATTERNS.AM, 6: PATTERNS.AM },
+  '服部': { 0: PATTERNS.SUN, 1: PATTERNS.FULL, 2: PATTERNS.FULL, 3: PATTERNS.FULL, 4: PATTERNS.FULL, 5: PATTERNS.FULL, 6: PATTERNS.AM },
+  '湯本': { 0: PATTERNS.PM_YUMOTO, 1: PATTERNS.PM_YUMOTO, 2: PATTERNS.PM_YUMOTO, 3: PATTERNS.PM_YUMOTO, 4: PATTERNS.PM_YUMOTO, 5: PATTERNS.PM_YUMOTO, 6: PATTERNS.PM_YUMOTO },
+  '鈴木': { 0: PATTERNS.SUN, 1: PATTERNS.FULL, 2: PATTERNS.FULL, 3: PATTERNS.FULL, 4: PATTERNS.FULL, 5: PATTERNS.FULL, 6: PATTERNS.AM }
+};
+
+function getAvailablePatterns(staff, dateStr) {
   if (staff.staff_type === 'external') return [''];
-  if (staff.staff_type === 'special') {
-    return ['', PATTERNS.AM, PATTERNS.FULL, 'りんご', '出張', '応援'];
+
+  const staffExpected = Object.entries(EXPECTED_PATTERNS).find(([name]) => staff.name.includes(name))?.[1];
+  let patterns = [''];
+
+  if (staffExpected && dateStr) {
+    const dow = new Date(dateStr + 'T00:00:00').getDay();
+    const pattern = staffExpected[dow];
+    patterns.push(pattern);
+  } else {
+    // 日付指定がない場合のフォールバック
+    const isYumoto = staff.name.includes('湯本');
+    if (staff.role === 'pharmacist') {
+      patterns.push(PATTERNS.AM, PATTERNS.SUN, PATTERNS.FULL);
+    } else if (staff.role === 'office') {
+      patterns.push(PATTERNS.AM_CLEAN, PATTERNS.SUN_CLEAN, PATTERNS.FULL_CLEAN);
+    }
+    if (isYumoto) {
+      patterns.push(PATTERNS.PM_YUMOTO);
+    }
   }
-  // 薬剤師
-  if (staff.role === 'pharmacist') {
-    return ['', PATTERNS.AM, PATTERNS.SUN, PATTERNS.FULL, PATTERNS.PM_YUMOTO];
+
+  // 代表（鈴木さん）は「〇午前」「〇午後」の例外選択を許可
+  if (staff.name.includes('鈴木')) {
+    if (!patterns.includes(PATTERNS.AM)) patterns.push(PATTERNS.AM);
+    if (!patterns.includes(PATTERNS.PM)) patterns.push(PATTERNS.PM);
   }
-  // 事務
-  if (staff.role === 'office') {
-    return ['', PATTERNS.AM_CLEAN, PATTERNS.SUN_CLEAN, PATTERNS.FULL_CLEAN, PATTERNS.PM_YUMOTO];
-  }
-  return [''];
+
+  return patterns;
 }
 
 // ============================================================
@@ -399,9 +429,14 @@ function renderOtherList() {
   const countEl = document.getElementById('other-reqs-count');
   if (!accordion || !listEl) return;
 
-  // 対象フィルタ：休み（備考あり）+ 条件付き全種
+  // 対象フィルタ：休み（固定休を除外、備考ありのみ）+ 条件付き全種
   const filtered = state.requests
-    .filter(r => r.request_type !== 'off' || (r.request_type === 'off' && r.note))
+    .filter(r => {
+      if (r.is_virtual) return false;
+      if (r.request_type === 'off' && (!r.note || r.note === '固定休')) return false;
+      if (r.request_type === 'off') return !!r.note;
+      return true;
+    })
     .sort((a, b) => {
       if (a.staff_id !== b.staff_id) return a.staff_id.localeCompare(b.staff_id);
       return a.date.localeCompare(b.date);
@@ -429,7 +464,16 @@ function renderOtherList() {
 
   listEl.innerHTML = grouped.map(g => {
     const staff = state.staffList.find(s => s.id === g.staff_id);
-    const staffName = staff?.name?.split(/[\s　]+/)[0] || '?';
+    let staffName = staff?.name || '?';
+    if (staffName !== '?') {
+      if (staffName.includes(' ') || staffName.includes('　')) {
+        staffName = staffName.split(/[\s　]+/)[0];
+      } else if (staffName.startsWith('小野寺')) {
+        staffName = '小野寺';
+      } else {
+        staffName = staffName.substring(0, 2);
+      }
+    }
 
     const startDt = new Date(g.start_date + 'T00:00:00');
     const endDt = new Date(g.end_date + 'T00:00:00');
@@ -819,9 +863,59 @@ function runAllChecks(assignments, yearMonth) {
 
   // 各スタッフごとの個別チェック
   for (const staff of staffList) {
-    const workCount = work(staff.id).length;
+    const workAssignments = work(staff.id);
+    const workCount = workAssignments.length;
     const consec = _maxConsecutiveWork(assignments, staff.id);
     const items = [];
+    
+    // ===== 勤務パターンの遵守チェック =====
+    const staffExpected = Object.entries(EXPECTED_PATTERNS).find(([name]) => staff.name.includes(name))?.[1];
+
+    let expectedText = '指定の勤務パターン遵守';
+    if (staffExpected) {
+      const e = staffExpected;
+      const allSame = Object.values(e).every(v => v === e[0]);
+      if (allSame) {
+        expectedText += `<br><span style="font-size:0.85em;color:var(--color-text-muted);font-weight:normal;display:block;margin-top:4px;">${e[0]}：全日</span>`;
+      } else {
+        const groups = {};
+        for(let i=0; i<7; i++) {
+           const pat = e[i];
+           if(!groups[pat]) groups[pat] = [];
+           groups[pat].push(i);
+        }
+        const formatDays = (days) => days.map(d => DAY_NAMES_JA[d]).join('・');
+        const parts = Object.entries(groups).map(([pat, days]) => `${pat}：${formatDays(days)}`);
+        expectedText += `<br><span style="font-size:0.85em;color:var(--color-text-muted);font-weight:normal;display:block;margin-top:4px;line-height:1.4;">${parts.join('<br>')}</span>`;
+      }
+    }
+
+    if (staffExpected && workCount > 0) {
+      let violationCount = 0;
+      workAssignments.forEach(a => {
+        const dow = new Date(a.date + 'T00:00:00').getDay();
+        if (a.work_pattern && a.work_pattern !== staffExpected[dow]) {
+          violationCount++;
+        }
+      });
+      items.push({
+        id: `${staff.id}-pattern-adherence`,
+        tag: '絶対',
+        status: violationCount === 0 ? 'pass' : 'fail',
+        text: expectedText,
+        value: violationCount === 0 ? '○' : `${violationCount}日違反`,
+        scoreDelta: violationCount > 0 ? -200 * violationCount : 0
+      });
+    } else {
+      items.push({
+        id: `${staff.id}-pattern-adherence`,
+        tag: '絶対',
+        status: 'pass',
+        text: expectedText,
+        value: '勤務なし',
+        scoreDelta: 0
+      });
+    }
     
     // 連勤チェック（湯本は最大2、それ以外は基本5）
     const maxConsec = staff.name.includes('湯本') ? 2 : (staff.work_conditions?.max_consecutive_days || 5);
@@ -918,6 +1012,14 @@ function runAllChecks(assignments, yearMonth) {
         text: `固定休：${offLabel}`,
         value: violations === 0 ? '○' : `${violations}日違反`,
         scoreDelta: violations > 0 ? -200 * violations : 0
+      });
+    } else {
+      items.push({
+        id: `${staff.id}-fixed-off`, tag: '',
+        status: 'pass',
+        text: `固定休：指定無し`,
+        value: '○',
+        scoreDelta: 0
       });
     }
 
@@ -1519,7 +1621,7 @@ function renderWarnings() {
 // ============================================================
 function openCellEditor(cell, staff, dateStr) {
   const editor = document.getElementById('cell-editor');
-  const patterns = getAvailablePatterns(staff);
+  const patterns = getAvailablePatterns(staff, dateStr);
   const currentAssign = state.assignments.find(a => a.staff_id === staff.id && a.date === dateStr);
   const currentPattern = currentAssign?.work_pattern || '';
   const currentAttendance = currentAssign?.attendance_type || '平日';
