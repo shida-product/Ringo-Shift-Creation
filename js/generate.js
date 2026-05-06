@@ -862,7 +862,34 @@ function runAllChecks(assignments, yearMonth) {
     const consec = _maxConsecutiveWork(assignments, staff.id);
     const items = [];
     
-    // ===== 勤務パターンの遵守チェック =====
+    // 1. 固定休の遵守チェック（一番上）
+    const fixedRule = FIXED_OFF_RULES.find(r => staff.name.includes(r.key));
+    if (fixedRule) {
+      const violations = work(staff.id).filter(a => {
+        const dow = new Date(a.date + 'T00:00:00').getDay();
+        return fixedRule.days.includes(dow);
+      }).length;
+      const offLabel = fixedRule.days.map(d => DAY_NAMES_JA[d]).join('・');
+      items.push({
+        id: `${staff.id}-fixed-off`, tag: '絶対',
+        status: violations === 0 ? 'pass' : 'fail',
+        text: `固定休：${offLabel}`,
+        value: violations === 0 ? '○' : `${violations}日違反`,
+        scoreDelta: violations > 0 ? -200 * violations : 0
+      });
+    } else {
+      let offLabel = '指定無し';
+      if (staff.name.includes('湯本')) offLabel = '指定無し（日曜は午後営業なし）';
+      items.push({
+        id: `${staff.id}-fixed-off`, tag: '絶対',
+        status: 'pass',
+        text: `固定休：${offLabel}`,
+        value: '○',
+        scoreDelta: 0
+      });
+    }
+
+    // 2. 勤務パターンの遵守チェック
     const staffExpected = Object.entries(EXPECTED_PATTERNS).find(([name]) => staff.name.includes(name))?.[1];
 
     let expectedText = '指定の勤務パターン遵守';
@@ -919,11 +946,11 @@ function runAllChecks(assignments, yearMonth) {
       });
     }
     
-    // 連勤チェック（湯本は最大2、それ以外は基本5）
+    // 3. 連勤チェック（湯本は最大2、それ以外は基本5）
     const maxConsec = staff.name.includes('湯本') ? 2 : (staff.work_conditions?.max_consecutive_days || 5);
     items.push({ id: `${staff.id}-consec`, tag: '絶対', status: consec <= maxConsec ? 'pass' : 'fail', text: `連勤：${maxConsec}連勤まで`, value: `${consec}日`, scoreDelta: consec > maxConsec ? -50 * (consec - maxConsec) : 0 });
 
-    // 勤務日数チェック
+    // 4. 勤務日数チェック
     const cond = staff.work_conditions || {};
     if (cond.target_days_per_month) {
       const maxDays = cond.max_days_per_month || cond.target_days_per_month;
@@ -932,10 +959,10 @@ function runAllChecks(assignments, yearMonth) {
       const delta = isBelowTarget ? -(cond.target_days_per_month - workCount) * 100 : (workCount > maxDays ? -(workCount - maxDays) * 5 : 0);
       items.push({ id: `${staff.id}-days`, tag: '絶対', status: baseStatus, text: `勤務日数（基本${cond.target_days_per_month}日/MAX${maxDays}日）`, value: `${workCount}日`, scoreDelta: delta });
     } else {
-      items.push({ id: `${staff.id}-days`, status: 'pass', text: '勤務日数', value: `${workCount}日`, scoreDelta: 0 });
+      items.push({ id: `${staff.id}-days`, tag: '絶対', status: 'pass', text: '勤務日数', value: `${workCount}日`, scoreDelta: 0 });
     }
 
-    // 湯本専用チェック（H4 / H6 / H7）
+    // 5. 湯本専用チェック（H4 / H6 / H7）
     if (staff.name.includes('湯本')) {
       // H6: 月勤務回数（6〜10回）
       const minDays = 6, targetDays = 8, maxDays = 10;
@@ -997,31 +1024,6 @@ function runAllChecks(assignments, yearMonth) {
         text: '1人勤務なし（服部or鈴木とペア）',
         value: aloneCount === 0 ? '○' : `${aloneCount}日単独`,
         scoreDelta: aloneCount > 0 ? -100 * aloneCount : 0
-      });
-    }
-
-    // 固定休の遵守チェック（仮想固定休はG2に引っかからないため個別にチェック）
-    const fixedRule = FIXED_OFF_RULES.find(r => staff.name.includes(r.key));
-    if (fixedRule) {
-      const violations = work(staff.id).filter(a => {
-        const dow = new Date(a.date + 'T00:00:00').getDay();
-        return fixedRule.days.includes(dow);
-      }).length;
-      const offLabel = fixedRule.days.map(d => DAY_NAMES_JA[d]).join('・');
-      items.push({
-        id: `${staff.id}-fixed-off`, tag: '絶対',
-        status: violations === 0 ? 'pass' : 'fail',
-        text: `固定休：${offLabel}`,
-        value: violations === 0 ? '○' : `${violations}日違反`,
-        scoreDelta: violations > 0 ? -200 * violations : 0
-      });
-    } else {
-      items.push({
-        id: `${staff.id}-fixed-off`, tag: '',
-        status: 'pass',
-        text: `固定休：指定無し`,
-        value: '○',
-        scoreDelta: 0
       });
     }
 
@@ -1141,19 +1143,21 @@ function generateShifts(yearMonth, manualOverrides, manualSet, randomize = false
       wc.total++;
 
       const dt = new Date(dateStr + 'T00:00:00');
-      const weekNum = Math.floor((dt.getDate() - 1) / 7);
-      wc.weekly = wc.weekly || {};
-      wc.weekly[weekNum] = (wc.weekly[weekNum] || 0) + 1;
-      
       const dayOfWeek = dt.getDay();
+
+      // 週の開始日（日曜日）を取得してキーにする
+      const weekStartDt = new Date(dt);
+      weekStartDt.setDate(weekStartDt.getDate() - dayOfWeek);
+      const wsStr = `${weekStartDt.getFullYear()}-${String(weekStartDt.getMonth()+1).padStart(2,'0')}-${String(weekStartDt.getDate()).padStart(2,'0')}`;
+
+      wc.weekly = wc.weekly || {};
+      wc.weekly[wsStr] = (wc.weekly[wsStr] || 0) + 1;
+      
       if (dayOfWeek >= 1 && dayOfWeek <= 5) wc.weekdays = (wc.weekdays || 0) + 1;
       if (dayOfWeek === 6) wc.saturdays = (wc.saturdays || 0) + 1;
       if (dayOfWeek === 0) wc.sundays = (wc.sundays || 0) + 1;
 
       if (dayOfWeek === 0 || dayOfWeek === 6) {
-        const weekStartDt = new Date(dt);
-        weekStartDt.setDate(weekStartDt.getDate() - dayOfWeek);
-        const wsStr = `${weekStartDt.getFullYear()}-${String(weekStartDt.getMonth()+1).padStart(2,'0')}-${String(weekStartDt.getDate()).padStart(2,'0')}`;
         wc.weekEndWorked = wc.weekEndWorked || {};
         wc.weekEndWorked[wsStr] = (wc.weekEndWorked[wsStr] || 0) + 1;
       }
@@ -1194,7 +1198,7 @@ function generateShifts(yearMonth, manualOverrides, manualSet, randomize = false
       if (result.find(a => a.staff_id === staff.id && a.date === dateStr)) return;
 
       const pattern = scheduleMap[dow];
-      if (pattern && canWork(staff.id, dateStr)) {
+      if (pattern && canWork(staff.id, dateStr) && assignedOffice < 2) {
         addAssignment(staff.id, dateStr, '平日', pattern);
         assignedOffice++;
       } else {
@@ -1223,18 +1227,16 @@ function generateShifts(yearMonth, manualOverrides, manualSet, randomize = false
     }
 
     // ----- 薬剤師の配置 -----
-    let reqPharm = (dow === 0 || dow === 6) ? 2 : 1; // 休日2名、平日1名
-    const weekNum = Math.floor((new Date(dateStr + 'T00:00:00').getDate() - 1) / 7);
+    let reqPharm = (dow === 0 || dow === 6 || dow === 2) ? 2 : 1; // 休日2名、平日1名、火曜は午後2名
 
     const fukushima = pharmacists.find(s => s.name.includes('福島'));
     const hattori = pharmacists.find(s => s.name.includes('服部'));
     const yumoto = pharmacists.find(s => s.name.includes('湯本'));
     const suzuki = pharmacists.find(s => s.name.includes('鈴木'));
-    const murakami = pharmacists.find(s => s.name.includes('村上'));
-    const spots = pharmacists.filter(s => s.name.includes('堀口') || s.name.includes('財津'));
 
     // 割り当てヘルパー
     const assignPharm = (staff, pattern) => {
+      if (assignedPharm >= 2) return false; // MAX2名制限
       if (!staff || manualSet.has(`${staff.id}_${dateStr}`)) return false;
       if (result.find(a => a.staff_id === staff.id && a.date === dateStr)) return false;
       if (canWork(staff.id, dateStr)) {
@@ -1245,90 +1247,92 @@ function generateShifts(yearMonth, manualOverrides, manualSet, randomize = false
       return false;
     };
 
-    if (dow === 0) {
-      // 日曜日 (必要人数: 2名)
-      // 鈴木は休み。服部は「土日どちらか1回」、福島は勤務(条件付き)。
-      const weekStartDt = new Date(dateStr + 'T00:00:00');
-      weekStartDt.setDate(weekStartDt.getDate() - dow);
-      const wsStr = `${weekStartDt.getFullYear()}-${String(weekStartDt.getMonth()+1).padStart(2,'0')}-${String(weekStartDt.getDate()).padStart(2,'0')}`;
+    // 週の開始日（日曜日）を取得して週識別子とする
+    const weekStartDt = new Date(dateStr + 'T00:00:00');
+    weekStartDt.setDate(weekStartDt.getDate() - dow);
+    const wsStr = `${weekStartDt.getFullYear()}-${String(weekStartDt.getMonth()+1).padStart(2,'0')}-${String(weekStartDt.getDate()).padStart(2,'0')}`;
 
-      let fukushimaCanWorkWeekend = true;
-      const offCount = fukushimaOffCountsPerWeek[wsStr] || 0;
-      if (offCount < 2) {
-        const wcF = workCounts[fukushima?.id] || {};
-        if ((wcF.weekEndWorked?.[wsStr] || 0) >= 1) fukushimaCanWorkWeekend = false;
-      }
-      if (fukushimaCanWorkWeekend) assignPharm(fukushima, PATTERNS.SUN);
-
-      const wcH = workCounts[hattori?.id] || {};
-      if ((wcH.saturdays || 0) === 0) {
-        assignPharm(hattori, PATTERNS.SUN);
-      }
+    // 1. 服部 (エース：水木金終日、土日のどちらか)
+    if (dow === 3 || dow === 4 || dow === 5) {
+      assignPharm(hattori, PATTERNS.FULL);
+    } else if (dow === 0) {
+      assignPharm(hattori, PATTERNS.SUN);
     } else if (dow === 6) {
-      // 土曜日 (必要人数: 2名)
-      assignPharm(suzuki, PATTERNS.AM);
-
-      const weekStartDt = new Date(dateStr + 'T00:00:00');
-      weekStartDt.setDate(weekStartDt.getDate() - dow);
-      const wsStr = `${weekStartDt.getFullYear()}-${String(weekStartDt.getMonth()+1).padStart(2,'0')}-${String(weekStartDt.getDate()).padStart(2,'0')}`;
-
-      let fukushimaCanWorkWeekend = true;
-      const offCount = fukushimaOffCountsPerWeek[wsStr] || 0;
-      if (offCount < 2) {
-        const wcF = workCounts[fukushima?.id] || {};
-        if ((wcF.weekEndWorked?.[wsStr] || 0) >= 1) fukushimaCanWorkWeekend = false;
-      }
-      if (fukushimaCanWorkWeekend) assignPharm(fukushima, PATTERNS.AM);
-
       const wcH = workCounts[hattori?.id] || {};
-      if ((wcH.saturdays || 0) + (wcH.sundays || 0) < 1) {
+      const workedSun = (wcH.weekEndWorked?.[wsStr] || 0) > 0;
+      if (!workedSun) {
         assignPharm(hattori, PATTERNS.AM);
       }
-    } else if (dow === 5) {
-      // 金曜日 (鈴木は休み)
-      assignPharm(fukushima, PATTERNS.AM);
-      assignPharm(hattori, PATTERNS.FULL);
-    } else {
-      // 月〜木曜日
-      assignPharm(suzuki, PATTERNS.FULL);
-      
-      // 服部は水・木・金の終日
-      if (dow === 3 || dow === 4) {
-        assignPharm(hattori, PATTERNS.FULL);
-      }
+    }
 
-      // 福島は週4〜5日なので、水曜を基本休みにして週5日を目指す（週末に出やすくする）
-      const wcF = workCounts[fukushima?.id] || {};
-      if (dow !== 3 && (wcF.weekly?.[weekNum] || 0) < 5) {
+    // 2. 福島 (週4〜5日上限を厳守。平日午前メイン、土日どちらか)
+    const wcF = workCounts[fukushima?.id] || {};
+    const fukushimaWeeklyCount = wcF.weekly?.[wsStr] || 0;
+    const canFukushimaWorkMore = fukushimaWeeklyCount < 5;
+
+    if (canFukushimaWorkMore) {
+      if (dow === 0) {
+        assignPharm(fukushima, PATTERNS.SUN);
+      } else if (dow === 6) {
+        const workedSun = (wcF.weekEndWorked?.[wsStr] || 0) > 0;
+        const offCount = fukushimaOffCountsPerWeek[wsStr] || 0;
+        // 平日に2回以上希望休がある場合は土日両方出勤OK
+        if (!workedSun || offCount >= 2) {
+          assignPharm(fukushima, PATTERNS.AM);
+        }
+      } else if (dow === 1 || dow === 4 || dow === 5) { // 月、木、金
         assignPharm(fukushima, PATTERNS.AM);
+      } else if (dow === 2 || dow === 3) { // 火、水
+        // 火曜日は上限2名により鈴木＋湯本で午後2名を確保するため、福島は基本休みにする。
+        // 水曜日も基本休み。ただし他で希望休があり出勤日数が足りない場合はアサイン。
+        if (fukushimaWeeklyCount < 2) {
+          assignPharm(fukushima, PATTERNS.AM);
+        }
       }
     }
 
-    // 湯本の配置 (月8回目標、最大10回。同じ週の土日はどちらかのみ。服部または鈴木がいる日)
-    if (yumoto) {
+    // 3. 湯本 (火曜午後カバー最優先、最大月10回、週2回まで)
+    if (yumoto && canWork(yumoto.id, dateStr)) {
       const wcY = workCounts[yumoto.id] || {};
-      // 週2回ペースで配置すると月8〜9回になる。最大10回でストップ。
-      if ((wcY.weekly?.[weekNum] || 0) < 2 && (wcY.total || 0) < 10) {
-        let yumotoCanWorkWeekend = true;
-        if (dow === 0 || dow === 6) {
-          const weekStartDt = new Date(dateStr + 'T00:00:00');
-          weekStartDt.setDate(weekStartDt.getDate() - dow);
-          const wsStr = `${weekStartDt.getFullYear()}-${String(weekStartDt.getMonth()+1).padStart(2,'0')}-${String(weekStartDt.getDate()).padStart(2,'0')}`;
-          if ((wcY.weekEndWorked?.[wsStr] || 0) >= 1) yumotoCanWorkWeekend = false;
+      const total = wcY.total || 0;
+      const weekly = wcY.weekly?.[wsStr] || 0;
+      
+      let shouldAssignYumoto = false;
+      if (total < 10 && weekly < 2) {
+        if (dow === 2) {
+          shouldAssignYumoto = true; // 火曜優先
+        } else if (total < 8) {
+          shouldAssignYumoto = true; // 目標8回までは埋める
         }
+      }
 
-        if (yumotoCanWorkWeekend) {
-          // 今日、服部か鈴木がアサインされているか確認
-          const hasPair = result.find(a => a.date === dateStr && (a.staff_id === hattori?.id || a.staff_id === suzuki?.id));
-          if (hasPair) {
-            assignPharm(yumoto, PATTERNS.PM_YUMOTO);
-          }
+      // 同週の土日重複なし
+      if (shouldAssignYumoto && (dow === 0 || dow === 6)) {
+        if ((wcY.weekEndWorked?.[wsStr] || 0) > 0) shouldAssignYumoto = false;
+      }
+
+      if (shouldAssignYumoto) {
+        // 服部か鈴木がいる日のみ
+        const suzukiCanWork = suzuki && canWork(suzuki.id, dateStr) && dow !== 0 && dow !== 5;
+        const hattoriWorks = result.some(a => a.staff_id === hattori?.id && a.date === dateStr);
+        if (hattoriWorks || suzukiCanWork) {
+          assignPharm(yumoto, PATTERNS.PM_YUMOTO);
         }
       }
     }
 
-    // 薬剤師が不足している場合の警告のみ（村上やスポットワーカーは手動入力のみ）
-    if (assignedPharm < reqPharm) {
+    // 4. 鈴木 (最後の砦、残りを埋める。月〜木終日、土曜午前)
+    if (suzuki && canWork(suzuki.id, dateStr) && dow !== 0 && dow !== 5) {
+      const pattern = (dow === 6) ? PATTERNS.AM : PATTERNS.FULL;
+      assignPharm(suzuki, pattern);
+    }
+
+    // 薬剤師不足チェック
+    if (dow === 2) {
+      // 火曜午後の実質稼働人数をカウント
+      const pmCount = result.filter(a => a.date === dateStr && a.work_pattern && (a.work_pattern.includes('終日') || a.work_pattern.includes('午後')) && pharmacists.find(p => p.id === a.staff_id)).length;
+      if (pmCount < 2) warnings.push(`${dateStr}: 薬剤師不足（火曜午後 ${pmCount}/2）`);
+    } else if (assignedPharm < reqPharm) {
       warnings.push(`${dateStr}: 薬剤師不足（${assignedPharm}/${reqPharm}）`);
     }
 
