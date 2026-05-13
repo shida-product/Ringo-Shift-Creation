@@ -71,6 +71,12 @@ document.addEventListener('DOMContentLoaded', async () => {
       showToast('カラー設定を保存しました', 'success');
     });
   }
+
+  // ログアウト
+  document.getElementById('btn-logout')?.addEventListener('click', async () => {
+    await supabase.auth.signOut();
+    window.location.replace('login.html');
+  });
 });
 
 // ============================================================

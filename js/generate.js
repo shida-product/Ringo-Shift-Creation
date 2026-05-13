@@ -355,6 +355,12 @@ function bindEvents() {
   document.getElementById('other-reqs-header').addEventListener('click', () => {
     document.getElementById('other-reqs-accordion').classList.toggle('is-open');
   });
+
+  // ログアウト
+  document.getElementById('btn-logout')?.addEventListener('click', async () => {
+    await supabase.auth.signOut();
+    window.location.replace('login.html');
+  });
 }
 
 // ============================================================

@@ -225,6 +225,12 @@ function bindEvents() {
 
   setupGanttDrag();
   setupGanttHover();
+
+  // ログアウト
+  document.getElementById('btn-logout')?.addEventListener('click', async () => {
+    await supabase.auth.signOut();
+    window.location.replace('login.html');
+  });
 }
 
 // ============================================================
