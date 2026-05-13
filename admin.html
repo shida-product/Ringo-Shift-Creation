@@ -25,16 +25,26 @@
 <body>
   <!-- ヘッダー -->
   <header class="app-header">
-    <div class="app-header__title">
-      <i data-lucide="palette" style="width:20px;height:20px;"></i>
-      カラー設定
+    <!-- 左グループ：タイトル + ナビ -->
+    <div class="app-header__left">
+      <div class="app-header__title">
+        <i data-lucide="palette" style="width:20px;height:20px;"></i>
+        カラー設定
+      </div>
+      <div class="header-divider"></div>
+      <nav class="app-header__nav">
+        <a href="index.html" class="app-header__link"><i data-lucide="calendar" style="width:16px;height:16px;"></i> 希望休</a>
+        <a href="generate.html" class="app-header__link"><i data-lucide="calendar-cog" style="width:16px;height:16px;"></i> シフト生成</a>
+        <a href="admin.html" class="app-header__link" style="color:var(--color-primary);font-weight:600;"><i data-lucide="palette" style="width:16px;height:16px;"></i> 設定</a>
+      </nav>
     </div>
-    <nav class="app-header__nav">
-      <a href="index.html" class="app-header__link"><i data-lucide="calendar" style="width:16px;height:16px;"></i> 希望休</a>
-      <a href="generate.html" class="app-header__link"><i data-lucide="calendar-cog" style="width:16px;height:16px;"></i> シフト生成</a>
-      <a href="admin.html" class="app-header__link" style="color:var(--color-primary);font-weight:600;"><i data-lucide="palette" style="width:16px;height:16px;"></i> 設定</a>
-      <button id="btn-logout" class="app-header__link" style="background:none;border:none;cursor:pointer;color:var(--color-text-secondary);display:flex;align-items:center;gap:4px;font-size:inherit;padding:0;"><i data-lucide="log-out" style="width:16px;height:16px;"></i> ログアウト</button>
-    </nav>
+
+    <!-- 右グループ：ログアウト -->
+    <div class="app-header__right">
+      <button id="btn-logout" class="app-header__logout">
+        <i data-lucide="log-out" style="width:15px;height:15px;"></i> ログアウト
+      </button>
+    </div>
   </header>
 
   <div class="admin-container">

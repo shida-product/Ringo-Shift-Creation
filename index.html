@@ -24,19 +24,21 @@
 </head>
 <body>
   <header class="app-header">
-    <div class="app-header__title">
-      <i data-lucide="calendar" style="width:20px;height:20px;"></i>
-      <span class="app-title-text">シフト希望</span>
+    <!-- 左グループ：タイトル + ナビ -->
+    <div class="app-header__left">
+      <div class="app-header__title">
+        <i data-lucide="calendar" style="width:20px;height:20px;"></i>
+        <span class="app-title-text">シフト希望</span>
+      </div>
+      <div class="header-divider"></div>
+      <nav class="app-header__nav">
+        <a href="index.html" class="app-header__link" style="color:var(--color-primary);font-weight:600;"><i data-lucide="calendar" style="width:16px;height:16px;"></i> 希望休</a>
+        <a href="generate.html" class="app-header__link"><i data-lucide="calendar-cog" style="width:16px;height:16px;"></i> シフト生成</a>
+        <a href="admin.html" class="app-header__link"><i data-lucide="palette" style="width:16px;height:16px;"></i> 設定</a>
+      </nav>
     </div>
 
-    <!-- 共通ナビゲーション追加 -->
-    <nav class="app-header__nav" style="margin-left: 20px;">
-      <a href="index.html" class="app-header__link" style="color:var(--color-primary);font-weight:600;"><i data-lucide="calendar" style="width:16px;height:16px;"></i> 希望休</a>
-      <a href="generate.html" class="app-header__link"><i data-lucide="calendar-cog" style="width:16px;height:16px;"></i> シフト生成</a>
-      <a href="admin.html" class="app-header__link"><i data-lucide="palette" style="width:16px;height:16px;"></i> 設定</a>
-      <button id="btn-logout" class="app-header__link" style="background:none;border:none;cursor:pointer;color:var(--color-text-secondary);display:flex;align-items:center;gap:4px;font-size:inherit;padding:0;"><i data-lucide="log-out" style="width:16px;height:16px;"></i> ログアウト</button>
-    </nav>
-
+    <!-- 中央：月ナビ -->
     <div class="month-nav" style="margin: 0 auto;">
       <button class="month-nav__btn" id="prev-month" aria-label="前月"><i data-lucide="chevron-left" style="width:18px;height:18px;"></i></button>
       <span class="month-nav__label" id="month-label" title="クリックして月を選択" style="cursor: pointer; user-select: none;"></span>
@@ -44,20 +46,18 @@
       <button class="month-nav__today-btn" id="today-month-btn" title="今月に戻る" style="display:none;">今月へ戻る</button>
     </div>
 
-    <nav class="app-header__nav">
+    <!-- 右グループ：凡例 + ログアウト -->
+    <div class="app-header__right">
       <div class="legend--chips">
-        <div class="legend__item">
-          <span class="legend__dot legend__dot--virtual"></span>固定休
-        </div>
-        <div class="legend__item">
-          <span class="legend__dot legend__dot--off"></span>休み希望
-        </div>
-        <div class="legend__item">
-          <span class="legend__dot legend__dot--other"></span>コメント
-        </div>
+        <div class="legend__item"><span class="legend__dot legend__dot--virtual"></span>固定休</div>
+        <div class="legend__item"><span class="legend__dot legend__dot--off"></span>休み希望</div>
+        <div class="legend__item"><span class="legend__dot legend__dot--other"></span>コメント</div>
       </div>
-
-    </nav>
+      <div class="header-divider"></div>
+      <button id="btn-logout" class="app-header__logout">
+        <i data-lucide="log-out" style="width:15px;height:15px;"></i> ログアウト
+      </button>
+    </div>
   </header>
 
   <!-- メインコンテナ -->
