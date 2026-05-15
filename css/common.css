@@ -128,11 +128,18 @@ button { cursor: pointer; border: none; background: none; }
   padding: 0 24px;
   overflow-x: auto;
   white-space: nowrap;
-  -ms-overflow-style: none; /* IE and Edge */
-  scrollbar-width: none; /* Firefox */
+  scrollbar-width: thin; /* Firefox */
+  scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
 }
 .app-header::-webkit-scrollbar {
-  display: none; /* Chrome, Safari and Opera */
+  height: 4px; /* Chrome, Safari and Opera */
+}
+.app-header::-webkit-scrollbar-track {
+  background: transparent;
+}
+.app-header::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
 }
 .app-header__title {
   font-size: var(--font-size-lg);
