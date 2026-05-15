@@ -98,8 +98,16 @@ function normalizeWorkPattern(pattern) {
 function normalizeAssignmentWorkPatterns(assignments) {
   return (assignments || []).map(a => ({
     ...a,
+    date: normalizeDateKey(a.date),
     work_pattern: normalizeWorkPattern(a.work_pattern)
   }));
+}
+
+function normalizeDateKey(value) {
+  if (!value) return '';
+  if (typeof value === 'string') return value.slice(0, 10);
+  if (value instanceof Date) return formatDate(value);
+  return String(value).slice(0, 10);
 }
 
 function normalizeStaffNameForCSV(staff) {
@@ -107,6 +115,12 @@ function normalizeStaffNameForCSV(staff) {
     return '笠原 若葉';
   }
   return staff?.name || '';
+}
+
+function countCSVWorkPatterns(assignments, yearMonth) {
+  return (assignments || []).filter(a =>
+    normalizeDateKey(a.date).startsWith(yearMonth) && normalizeWorkPattern(a.work_pattern)
+  ).length;
 }
 
 const EXPECTED_PATTERNS = {
@@ -1846,8 +1860,33 @@ function buildEditorOption(label, value, isActive) {
 // ============================================================
 // CSV出力（Shift-JIS）
 // ============================================================
-function handleCSVExport() {
+async function ensureAssignmentsForCSV(yearMonth) {
+  if (countCSVWorkPatterns(state.assignments, yearMonth) > 0) return true;
+
+  const { data, error } = await supabase
+    .from('ringo_shift_assignments')
+    .select('*')
+    .eq('year_month', yearMonth);
+
+  if (error) {
+    console.error('Error reloading assignments for CSV:', error);
+    showToast('CSV出力用のシフト取得に失敗しました', 'error');
+    return false;
+  }
+
+  if (data && data.length > 0) {
+    state.assignments = normalizeAssignmentWorkPatterns(data);
+    if (countCSVWorkPatterns(state.assignments, yearMonth) > 0) return true;
+  }
+
+  showToast('勤務パターンが未作成または未保存です。先にシフトを生成・保存してください。', 'error');
+  return false;
+}
+
+async function handleCSVExport() {
   const yearMonth = getCurrentYearMonth();
+  if (!(await ensureAssignmentsForCSV(yearMonth))) return;
+
   const [year, month] = yearMonth.split('-').map(Number);
   const daysInMonth = new Date(year, month, 0).getDate();
 
@@ -1872,7 +1911,7 @@ function handleCSVExport() {
 
     for (let d = 1; d <= daysInMonth; d++) {
       const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-      const assign = state.assignments.find(a => a.staff_id === staff.id && a.date === dateStr);
+      const assign = state.assignments.find(a => a.staff_id === staff.id && normalizeDateKey(a.date) === dateStr);
       let attendance = assign?.attendance_type || '平日';
       const pattern = normalizeWorkPattern(assign?.work_pattern);
 
