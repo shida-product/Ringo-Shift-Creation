@@ -356,7 +356,7 @@ button { cursor: pointer; border: none; background: none; }
 .legend--chips {
   display: flex;
   gap: 8px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   font-size: var(--font-size-xs);
   font-weight: 500;
   color: var(--color-text-secondary);
