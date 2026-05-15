@@ -41,7 +41,7 @@ const PATTERNS = {
   SUN: '◯日曜',             // 09:00-12:30
   SUN_CLEAN: '◯日曜（掃除）',// 08:50-12:30
   FULL: '◯終日',             // 09:00-18:30
-  FULL_CLEAN: '終日（掃除）', // 08:50-18:30
+  FULL_CLEAN: '◯終日（掃除）', // 08:50-18:30
   PM: '◯午後',               // 午後のみ
   PM_YUMOTO: '湯本午後'       // 14:45-18:15
 };
@@ -52,7 +52,7 @@ const PATTERN_CSS = {
   '◯日曜': 'pattern-marker--am',
   '◯日曜（掃除）': 'pattern-marker--am',
   '◯終日': 'pattern-marker--full',
-  '終日（掃除）': 'pattern-marker--full',
+  '◯終日（掃除）': 'pattern-marker--full',
   '◯午後': 'pattern-marker--pm',
   '湯本午後': 'pattern-marker--pm',
   'りんご': 'pattern-marker--ringo',
@@ -66,7 +66,7 @@ const PATTERN_DOT_CLASS = {
   '◯日曜': 'legend__dot--am',
   '◯日曜（掃除）': 'legend__dot--am',
   '◯終日': 'legend__dot--full',
-  '終日（掃除）': 'legend__dot--full',
+  '◯終日（掃除）': 'legend__dot--full',
   '◯午後': 'legend__dot--pm',
   '湯本午後': 'legend__dot--pm',
   'りんご': 'legend__dot--ringo',
@@ -80,13 +80,34 @@ const PATTERN_LABEL = {
   '◯日曜': '午前',
   '◯日曜（掃除）': '午前',
   '◯終日': '終日',
-  '終日（掃除）': '終日',
+  '◯終日（掃除）': '終日',
   '◯午後': '午後',
   '湯本午後': '午後',
   'りんご': 'り',
   '出張': '出張',
   '応援': '応援',
 };
+
+function normalizeWorkPattern(pattern) {
+  if (!pattern) return '';
+  const normalizedCircle = pattern.replace(/^〇/, '◯');
+  if (normalizedCircle === '終日（掃除）') return PATTERNS.FULL_CLEAN;
+  return normalizedCircle;
+}
+
+function normalizeAssignmentWorkPatterns(assignments) {
+  return (assignments || []).map(a => ({
+    ...a,
+    work_pattern: normalizeWorkPattern(a.work_pattern)
+  }));
+}
+
+function normalizeStaffNameForCSV(staff) {
+  if (staff?.employee_no === '19' && staff.name.includes('笠原')) {
+    return '笠原 若葉';
+  }
+  return staff?.name || '';
+}
 
 const EXPECTED_PATTERNS = {
   '野口': { 0: PATTERNS.SUN_CLEAN, 1: PATTERNS.FULL_CLEAN, 2: PATTERNS.FULL_CLEAN, 3: PATTERNS.FULL_CLEAN, 4: PATTERNS.FULL_CLEAN, 5: PATTERNS.FULL_CLEAN, 6: PATTERNS.AM_CLEAN },
@@ -655,7 +676,7 @@ async function loadExistingAssignments() {
     console.error('Error loading assignments:', error);
     state.assignments = [];
   } else {
-    state.assignments = data || [];
+    state.assignments = normalizeAssignmentWorkPatterns(data);
   }
 
   if (state.assignments.length > 0) {
@@ -673,7 +694,7 @@ async function loadExistingAssignments() {
       state.history = localData.history;
       state.historyIndex = localData.historyIndex ?? (localData.history.length - 1);
       // DBよりもローカルの最新履歴（未保存状態など）を優先して復元する
-      state.assignments = cloneAssignments(state.history[state.historyIndex]);
+      state.assignments = normalizeAssignmentWorkPatterns(cloneAssignments(state.history[state.historyIndex]));
       // もしDBと同期させたい場合はここでsaveAssignmentsを呼ぶのもあり
     } else {
       state.baselineAssignments = cloneAssignments(state.assignments);
@@ -940,7 +961,7 @@ function runAllChecks(assignments, yearMonth) {
       const e = staffExpected;
       const PATTERN_PREFIX = {
         '◯午前': '①', '◯午前（掃除）': '②', '◯日曜': '③', '◯日曜（掃除）': '④',
-        '◯終日': '⑤', '終日（掃除）': '⑥', '湯本午後': '⑦', '◯午後': '⑧'
+        '◯終日': '⑤', '◯終日（掃除）': '⑥', '湯本午後': '⑦', '◯午後': '⑧'
       };
       const withNum = (pat) => (PATTERN_PREFIX[pat] || '') + pat;
 
@@ -1526,7 +1547,7 @@ function renderGantt() {
       const isEbisuClosed = isSunday;
 
       const assign = state.assignments.find(a => a.staff_id === staff.id && a.date === dateStr);
-      const pattern = assign?.work_pattern || '';
+      const pattern = normalizeWorkPattern(assign?.work_pattern);
       const attendance = assign?.attendance_type || '平日';
       const isManual = assign?.is_manual_override || false;
 
@@ -1806,7 +1827,7 @@ function buildEditorOption(label, value, isActive) {
     '◯日曜': '③',
     '◯日曜（掃除）': '④',
     '◯終日': '⑤',
-    '終日（掃除）': '⑥',
+    '◯終日（掃除）': '⑥',
     '湯本午後': '⑦',
     '◯午後': '⑧'
   };
@@ -1844,15 +1865,16 @@ function handleCSVExport() {
 
   for (const staff of sortedStaff) {
     // 名前を姓名に分割（半角・全角スペースのどちらでも対応）
-    const nameParts = staff.name.trim().split(/[\s\u3000]+/);
-    const lastName = nameParts[0] || staff.name;
+    const csvStaffName = normalizeStaffNameForCSV(staff);
+    const nameParts = csvStaffName.trim().split(/[\s\u3000]+/);
+    const lastName = nameParts[0] || csvStaffName;
     const firstName = nameParts.slice(1).join('') || '';
 
     for (let d = 1; d <= daysInMonth; d++) {
       const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
       const assign = state.assignments.find(a => a.staff_id === staff.id && a.date === dateStr);
       let attendance = assign?.attendance_type || '平日';
-      const pattern = assign?.work_pattern || '';
+      const pattern = normalizeWorkPattern(assign?.work_pattern);
 
       // CSV出力時のみ、CSV_WEEKDAY_REQUEST_TYPES以外の希望が出ている日は「所定休日」として出力
       if (attendance === '所定休日') {
