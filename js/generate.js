@@ -1,4 +1,4 @@
-/**
+﻿/**
  * シフト生成 メインロジック
  * - シフト自動生成アルゴリズム（ルールベース貪欲法）
  * - ガントチャート描画
@@ -36,24 +36,24 @@ const REQUEST_TYPE_ICON = { off: '🔴', other: '🟡', virtual: '⚪' };
 const CSV_WEEKDAY_REQUEST_TYPES = [];
 
 const PATTERNS = {
-  AM: '〇午前',               // 09:00-13:00
-  AM_CLEAN: '〇午前（掃除）', // 08:50-13:00
-  SUN: '〇日曜',             // 09:00-12:30
-  SUN_CLEAN: '〇日曜（掃除）',// 08:50-12:30
-  FULL: '〇終日',             // 09:00-18:30
+  AM: '◯午前',               // 09:00-13:00
+  AM_CLEAN: '◯午前（掃除）', // 08:50-13:00
+  SUN: '◯日曜',             // 09:00-12:30
+  SUN_CLEAN: '◯日曜（掃除）',// 08:50-12:30
+  FULL: '◯終日',             // 09:00-18:30
   FULL_CLEAN: '終日（掃除）', // 08:50-18:30
-  PM: '〇午後',               // 午後のみ
+  PM: '◯午後',               // 午後のみ
   PM_YUMOTO: '湯本午後'       // 14:45-18:15
 };
 
 const PATTERN_CSS = {
-  '〇午前': 'pattern-marker--am',
-  '〇午前（掃除）': 'pattern-marker--am',
-  '〇日曜': 'pattern-marker--am',
-  '〇日曜（掃除）': 'pattern-marker--am',
-  '〇終日': 'pattern-marker--full',
+  '◯午前': 'pattern-marker--am',
+  '◯午前（掃除）': 'pattern-marker--am',
+  '◯日曜': 'pattern-marker--am',
+  '◯日曜（掃除）': 'pattern-marker--am',
+  '◯終日': 'pattern-marker--full',
   '終日（掃除）': 'pattern-marker--full',
-  '〇午後': 'pattern-marker--pm',
+  '◯午後': 'pattern-marker--pm',
   '湯本午後': 'pattern-marker--pm',
   'りんご': 'pattern-marker--ringo',
   '出張': 'pattern-marker--other',
@@ -61,13 +61,13 @@ const PATTERN_CSS = {
 };
 
 const PATTERN_DOT_CLASS = {
-  '〇午前': 'legend__dot--am',
-  '〇午前（掃除）': 'legend__dot--am',
-  '〇日曜': 'legend__dot--am',
-  '〇日曜（掃除）': 'legend__dot--am',
-  '〇終日': 'legend__dot--full',
+  '◯午前': 'legend__dot--am',
+  '◯午前（掃除）': 'legend__dot--am',
+  '◯日曜': 'legend__dot--am',
+  '◯日曜（掃除）': 'legend__dot--am',
+  '◯終日': 'legend__dot--full',
   '終日（掃除）': 'legend__dot--full',
-  '〇午後': 'legend__dot--pm',
+  '◯午後': 'legend__dot--pm',
   '湯本午後': 'legend__dot--pm',
   'りんご': 'legend__dot--ringo',
   '出張': 'legend__dot--other',
@@ -75,13 +75,13 @@ const PATTERN_DOT_CLASS = {
 };
 
 const PATTERN_LABEL = {
-  '〇午前': '午前',
-  '〇午前（掃除）': '午前',
-  '〇日曜': '午前',
-  '〇日曜（掃除）': '午前',
-  '〇終日': '終日',
+  '◯午前': '午前',
+  '◯午前（掃除）': '午前',
+  '◯日曜': '午前',
+  '◯日曜（掃除）': '午前',
+  '◯終日': '終日',
   '終日（掃除）': '終日',
-  '〇午後': '午後',
+  '◯午後': '午後',
   '湯本午後': '午後',
   'りんご': 'り',
   '出張': '出張',
@@ -939,8 +939,8 @@ function runAllChecks(assignments, yearMonth) {
     if (staffExpected) {
       const e = staffExpected;
       const PATTERN_PREFIX = {
-        '〇午前': '①', '〇午前（掃除）': '②', '〇日曜': '③', '〇日曜（掃除）': '④',
-        '〇終日': '⑤', '終日（掃除）': '⑥', '湯本午後': '⑦', '〇午後': '⑧'
+        '◯午前': '①', '◯午前（掃除）': '②', '◯日曜': '③', '◯日曜（掃除）': '④',
+        '◯終日': '⑤', '終日（掃除）': '⑥', '湯本午後': '⑦', '◯午後': '⑧'
       };
       const withNum = (pat) => (PATTERN_PREFIX[pat] || '') + pat;
 
@@ -1234,7 +1234,7 @@ function generateShifts(yearMonth, manualOverrides, manualSet, randomize = false
     let assignedOffice = 0;
 
     // ----- 事務の配置 -----
-    // 平日は⑥終日(掃除)、土曜は②〇午前(掃除)、日曜は④〇日曜(掃除)
+    // 平日は⑥終日(掃除)、土曜は②◯午前(掃除)、日曜は④◯日曜(掃除)
     const assignOffice = (staffName, scheduleMap) => {
       const staff = officeStaff.find(s => s.name.includes(staffName));
       if (!staff || manualSet.has(`${staff.id}_${dateStr}`)) return;
@@ -1801,17 +1801,17 @@ function buildEditorOption(label, value, isActive) {
   }
 
   const PATTERN_PREFIX = {
-    '〇午前': '①',
-    '〇午前（掃除）': '②',
-    '〇日曜': '③',
-    '〇日曜（掃除）': '④',
-    '〇終日': '⑤',
+    '◯午前': '①',
+    '◯午前（掃除）': '②',
+    '◯日曜': '③',
+    '◯日曜（掃除）': '④',
+    '◯終日': '⑤',
     '終日（掃除）': '⑥',
     '湯本午後': '⑦',
-    '〇午後': '⑧'
+    '◯午後': '⑧'
   };
 
-  let displayLabel = label.replace(/^[○〇☆]/, '');
+  let displayLabel = label.replace(/^[○◯☆]/, '');
   if (PATTERN_PREFIX[label]) {
     displayLabel = PATTERN_PREFIX[label] + displayLabel;
   }
@@ -1843,8 +1843,8 @@ function handleCSVExport() {
   const rows = [headers.join(',')];
 
   for (const staff of sortedStaff) {
-    // 名前を姓名に分割
-    const nameParts = staff.name.replace(/\s+/g, '　').split('　');
+    // 名前を姓名に分割（半角・全角スペースのどちらでも対応）
+    const nameParts = staff.name.trim().split(/[\s\u3000]+/);
     const lastName = nameParts[0] || staff.name;
     const firstName = nameParts.slice(1).join('') || '';
 
@@ -1862,8 +1862,8 @@ function handleCSVExport() {
         }
       }
 
-      // 日付フォーマット: YYYY/M/D
-      const csvDate = `${year}/${month}/${d}`;
+      // 日付フォーマット: YYYY/MM/DD（ゼロパディング）
+      const csvDate = `${year}/${String(month).padStart(2, '0')}/${String(d).padStart(2, '0')}`;
       const row = [
         staff.employee_no || '',
         lastName,
