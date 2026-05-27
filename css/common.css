@@ -506,9 +506,7 @@ select.input-field,
   position: fixed;
   inset: 0;
   z-index: 200;
-  background: rgba(15, 23, 42, 0.4); /* slate-900 / 40% */
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
+  background: rgba(15, 23, 42, 0.65); /* ぼかし削除に伴い背景を少し濃くして視認性を確保 */
   display: flex;
   align-items: center;
   justify-content: center;
@@ -523,10 +521,12 @@ select.input-field,
   box-shadow: var(--shadow-lg), 0 20px 25px -5px rgba(0,0,0,0.1);
   padding: 32px;
   width: min(440px, 90vw);
-  transform: translateY(16px) scale(0.98);
+  transform: translate3d(0, 16px, 0) scale(0.98); /* 3D変形を強制してAndroidのタップバグを防止 */
   transition: all var(--transition-normal);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
 }
-.modal-overlay.active .modal { transform: translateY(0) scale(1); }
+.modal-overlay.active .modal { transform: translate3d(0, 0, 0) scale(1); }
 
 .modal__title { font-size: var(--font-size-lg); font-weight: 700; margin-bottom: 24px; color: var(--color-text); }
 .modal__field { margin-bottom: 20px; }
