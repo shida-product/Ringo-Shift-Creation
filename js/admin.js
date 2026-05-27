@@ -122,7 +122,7 @@ function renderStaffList() {
   const container = document.getElementById('staff-list');
 
   if (staffList.length === 0) {
-    container.innerHTML = '<p style="color:var(--color-text-muted);text-align:center;padding:40px 0;">スタッフが登録されていません</p>';
+    container.innerHTML = '<p class="staff-list__empty">スタッフが登録されていません</p>';
     return;
   }
 
@@ -158,7 +158,7 @@ function renderStaffList() {
           <span class="staff-card__name">${escapeHtml(staff.name)}</span>
         </div>
         ${condSummary ? `<div class="staff-card__conditions">${condSummary}</div>` : ''}
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px; flex-wrap:wrap; gap:8px;">
+        <div class="staff-card__tools">
           <div class="color-swatches">
             ${Object.entries(COLOR_NAMES).map(([hex, name]) => {
               const isUsedByOther = usedColors.has(hex) && currentColor !== hex;
@@ -170,7 +170,7 @@ function renderStaffList() {
               `;
             }).join('')}
           </div>
-          <div class="staff-card__actions" style="margin-left:auto;">
+          <div class="staff-card__actions">
             <button class="btn btn--ghost btn--sm" onclick="toggleActive('${staff.id}')" title="${staff.is_active ? '無効化' : '有効化'}">
               <i data-lucide="${staff.is_active ? 'eye-off' : 'eye'}"></i>
             </button>

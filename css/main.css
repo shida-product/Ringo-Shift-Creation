@@ -14,6 +14,12 @@
    ================================================================ */
 .gantt-wrapper {
   background: var(--color-surface);
+  padding: 0;
+  overflow-x: auto;
+}
+
+.gantt-scroll {
+  overflow-x: auto;
 }
 
 .gantt-table {
@@ -237,10 +243,15 @@
   gap: 8px;
   overflow-x: auto;
   padding: 4px 0 14px;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) transparent;
 }
-.staff-chips::-webkit-scrollbar { display: none; }
+.staff-chips::-webkit-scrollbar { height: 4px; }
+.staff-chips::-webkit-scrollbar-track { background: transparent; }
+.staff-chips::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: var(--radius-full);
+}
 
 .staff-chip {
   display: inline-flex;
@@ -635,6 +646,10 @@
   color: var(--color-danger);
 }
 
+.gantt-day-name {
+  font-size: 0.6rem;
+}
+
 /* ================================================================
    レスポンシブ
    ================================================================ */
@@ -648,11 +663,33 @@
   .calendar-wrapper {
     display: block; /* スマホでカレンダー表示 */
   }
+  .staff-chips {
+    display: flex;
+  }
   .toolbar-surface {
     justify-content: center;
   }
   /* 凡例は横スクロールで確認可能にするため表示維持 */
   /* スタッフ選択ドロップダウンはチップUIに置き換え */
   .staff-selector { display: none; }
+  .calendar-grid__cell {
+    min-height: 74px;
+    padding: 4px 2px 3px;
+  }
+  .cal-date__num {
+    width: 24px;
+    height: 24px;
+  }
+  .cal-evt {
+    font-size: 0.56rem;
+    line-height: 1.45;
+  }
+  .other-list {
+    margin-top: 18px;
+  }
+  .other-list__title {
+    font-size: var(--font-size-base);
+    margin-bottom: 12px;
+  }
 }
 

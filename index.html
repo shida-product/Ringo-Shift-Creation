@@ -27,21 +27,21 @@
     <!-- 左グループ：タイトル + ナビ -->
     <div class="app-header__left">
       <div class="app-header__title">
-        <i data-lucide="calendar" style="width:20px;height:20px;"></i>
+        <i data-lucide="calendar" class="icon-xl"></i>
         <span class="app-title-text">シフト希望</span>
       </div>
       <div class="header-divider"></div>
       <nav class="app-header__nav">
-        <a href="generate.html" class="app-header__link"><i data-lucide="calendar-cog" style="width:16px;height:16px;"></i> シフト生成</a>
-        <a href="admin.html" class="app-header__link"><i data-lucide="palette" style="width:16px;height:16px;"></i> 設定</a>
+        <a href="generate.html" class="app-header__link"><i data-lucide="calendar-cog" class="icon-md"></i> シフト生成</a>
+        <a href="admin.html" class="app-header__link"><i data-lucide="palette" class="icon-md"></i> 設定</a>
       </nav>
     </div>
 
     <!-- 中央：月ナビ -->
-    <div class="month-nav" style="margin: 0 auto;">
-      <button class="month-nav__btn" id="prev-month" aria-label="前月"><i data-lucide="chevron-left" style="width:18px;height:18px;"></i></button>
-      <span class="month-nav__label" id="month-label" title="クリックして月を選択" style="cursor: pointer; user-select: none;"></span>
-      <button class="month-nav__btn" id="next-month" aria-label="次月"><i data-lucide="chevron-right" style="width:18px;height:18px;"></i></button>
+    <div class="month-nav month-nav--center">
+      <button class="month-nav__btn" id="prev-month" aria-label="前月"><i data-lucide="chevron-left" class="icon-lg"></i></button>
+      <span class="month-nav__label month-nav__label--clickable" id="month-label" title="クリックして月を選択"></span>
+      <button class="month-nav__btn" id="next-month" aria-label="次月"><i data-lucide="chevron-right" class="icon-lg"></i></button>
       <button class="month-nav__today-btn" id="today-month-btn" title="今月に戻る" style="display:none;">今月へ戻る</button>
     </div>
 
@@ -54,7 +54,7 @@
       </div>
       <div class="header-divider"></div>
       <button id="btn-logout" class="app-header__logout">
-        <i data-lucide="log-out" style="width:15px;height:15px;"></i> ログアウト
+        <i data-lucide="log-out" class="icon-sm"></i> ログアウト
       </button>
     </div>
   </header>
@@ -63,8 +63,8 @@
   <div class="main-container">
 
     <!-- ガントチャート（PC） -->
-    <div class="card-surface gantt-wrapper" id="gantt-wrapper" style="padding: 0; overflow-x: auto;">
-      <div style="overflow-x: auto;">
+    <div class="card-surface gantt-wrapper" id="gantt-wrapper">
+      <div class="gantt-scroll">
         <table class="gantt-table" id="gantt-table">
           <thead id="gantt-head"></thead>
           <tbody id="gantt-body"></tbody>
@@ -93,10 +93,10 @@
       </div>
       <div class="modal__field" id="modal-dates-field">
         <span class="modal__label">対象日</span>
-        <div style="display: flex; align-items: center; gap: 8px;">
-          <input type="date" id="modal-date-start" class="input-field" style="padding: 6px; font-family: inherit;">
+        <div class="modal__date-range">
+          <input type="date" id="modal-date-start" class="input-field modal__date-input">
           <span>〜</span>
-          <input type="date" id="modal-date-end" class="input-field" style="padding: 6px; font-family: inherit;">
+          <input type="date" id="modal-date-end" class="input-field modal__date-input">
         </div>
       </div>
       <div class="modal__field">
@@ -116,13 +116,13 @@
         <span class="modal__label">備考</span>
         <textarea id="modal-note" class="input-field" rows="2" placeholder="午前だけ出勤可能、など"></textarea>
       </div>
-      <div class="modal__history" id="modal-history" style="display:none;margin-top:16px;padding-top:16px;border-top:1px dashed var(--color-border);">
-        <span class="modal__label" style="font-size:0.75rem;">変更履歴</span>
-        <ul class="modal__history-list" id="modal-history-list" style="list-style:none;font-size:var(--font-size-xs);color:var(--color-text-secondary);gap:4px;display:flex;flex-direction:column;"></ul>
+      <div class="modal__history" id="modal-history">
+        <span class="modal__label modal__history-label">変更履歴</span>
+        <ul class="modal__history-list" id="modal-history-list"></ul>
       </div>
       <div class="modal__actions">
         <button class="btn btn--danger" id="modal-delete" style="display:none;">削除</button>
-        <div style="flex:1"></div>
+        <div class="modal__spacer"></div>
         <button class="btn btn--outline" id="modal-cancel">キャンセル</button>
         <button class="btn btn--primary" id="modal-save">保存</button>
       </div>
@@ -136,7 +136,7 @@
       <div class="bottom-sheet__header">
         <span class="bottom-sheet__title" id="bottom-sheet-title"></span>
         <button class="bottom-sheet__close" id="bottom-sheet-close" aria-label="閉じる">
-          <i data-lucide="x" style="width:16px;height:16px;"></i>
+          <i data-lucide="x" class="icon-md"></i>
         </button>
       </div>
       <div class="bottom-sheet__body" id="bottom-sheet-body"></div>
@@ -145,7 +145,7 @@
 
   <!-- FAB（スマホ用・スタッフ選択時に表示） -->
   <button class="fab" id="fab-add" aria-label="今日の希望を登録" style="display:none;">
-    <i data-lucide="plus" style="width:24px;height:24px;"></i>
+    <i data-lucide="plus" class="icon-2xl"></i>
   </button>
 
   <!-- 月選択モーダル -->

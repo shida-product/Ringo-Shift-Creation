@@ -256,7 +256,7 @@ function renderMonthPickerGrid() {
   grid.innerHTML = MONTH_LABELS.map((label, i) => {
     const isCurrent = (pickerYear === state.currentYear && i === state.currentMonth);
     const isDisabled = (pickerYear < 2026 || pickerYear > 2026 || (pickerYear === 2026 && i < 4));
-    const attr = isDisabled ? ' disabled style="opacity:0.3;cursor:not-allowed;"' : '';
+    const attr = isDisabled ? ' disabled' : '';
     return `<button class="month-picker__month-btn${isCurrent ? ' is-current' : ''}" data-month="${i}"${attr}>${label}</button>`;
   }).join('');
 
@@ -535,7 +535,7 @@ function renderGantt() {
       isHoliday && 'is-holiday',
     ].filter(Boolean).join(' ');
     const title = isHoliday ? ` title="${isHoliday}"` : '';
-    headHtml += `<th class="${cls}"${title} data-date="${dateStr}">${d}<br><span style="font-size:0.6rem">${dayNames[dow]}</span></th>`;
+    headHtml += `<th class="${cls}"${title} data-date="${dateStr}">${d}<br><span class="gantt-day-name">${dayNames[dow]}</span></th>`;
   }
   thead.innerHTML = headHtml + '</tr>';
 
@@ -832,7 +832,7 @@ function showDayDetail(dateStr) {
   // ボトムシートの中身
   let bodyHtml = '';
   if (dayReqs.length === 0) {
-    bodyHtml = '<p style="font-size:var(--font-size-sm);color:var(--color-text-muted);padding:4px 0 8px;">この日の希望はありません</p>';
+    bodyHtml = '<p class="day-detail__empty">この日の希望はありません</p>';
   } else {
     bodyHtml = '<ul class="day-detail__list">';
     dayReqs.forEach(r => {
@@ -847,7 +847,7 @@ function showDayDetail(dateStr) {
       const staffObj = state.staffList.find(s => s.id === r.staff_id);
       bodyHtml += `<li class="day-detail__item day-detail__item--tappable" data-staff-id="${r.staff_id}" data-date="${dateStr}">
         <span class="day-detail__name">${escapeHtml(staffObj?.name || r.staff?.name || '?')}</span>
-        <span class="cal-evt ${evtCls}" style="padding:3px 10px;border-radius:var(--radius-full);flex-shrink:0;">${type}</span>
+        <span class="cal-evt ${evtCls} day-detail__badge">${type}</span>
         <i data-lucide="chevron-right" class="day-detail__chevron"></i>
         ${note}
       </li>`;
@@ -856,8 +856,8 @@ function showDayDetail(dateStr) {
   }
 
   // 新規登録ボタン（常に表示、スタッフ未選択時はモーダル内で選択）
-  bodyHtml += `<button class="btn btn--primary btn--sm" style="width:100%;margin-top:14px;" id="bottom-sheet-add">
-    <i data-lucide="plus" style="width:14px;height:14px;"></i> 新規登録
+  bodyHtml += `<button class="btn btn--primary btn--sm btn--block bottom-sheet__add" id="bottom-sheet-add">
+    <i data-lucide="plus" class="icon-xs"></i> 新規登録
   </button>`;
 
   document.getElementById('bottom-sheet-body').innerHTML = bodyHtml;

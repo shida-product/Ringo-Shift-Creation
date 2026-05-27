@@ -418,7 +418,7 @@ function renderMonthPickerGrid() {
   grid.innerHTML = MONTH_LABELS.map((label, i) => {
     const isCurrent = (pickerYear === state.currentYear && i === state.currentMonth);
     const isDisabled = (pickerYear < 2026 || pickerYear > 2026 || (pickerYear === 2026 && i < 4));
-    const attr = isDisabled ? ' disabled style="opacity:0.3;cursor:not-allowed;"' : '';
+    const attr = isDisabled ? ' disabled' : '';
     return `<button class="month-picker__month-btn${isCurrent ? ' is-current' : ''}" data-month="${i}"${attr}>${label}</button>`;
   }).join('');
   grid.querySelectorAll('.month-picker__month-btn:not([disabled])').forEach(btn => {
@@ -530,7 +530,7 @@ function renderOtherList() {
   accordion.style.display = '';
 
   if (grouped.length === 0) {
-    listEl.innerHTML = '<p style="font-size:var(--font-size-sm);color:var(--color-text-muted);padding:8px 0;">条件付き希望はありません</p>';
+    listEl.innerHTML = '<p class="other-reqs-empty">条件付き希望はありません</p>';
     return;
   }
 
@@ -789,7 +789,7 @@ async function handleGenerate() {
     showToast('生成エラー: ' + err.message, 'error');
   } finally {
     btn.disabled = false;
-    btn.innerHTML = '<i data-lucide="sparkles" style="width:16px;height:16px;"></i> シフト生成';
+    btn.innerHTML = '<i data-lucide="sparkles" class="icon-md"></i> シフト生成';
     lucide.createIcons();
   }
 }
@@ -981,7 +981,7 @@ function runAllChecks(assignments, yearMonth) {
 
       const allSame = Object.values(e).every(v => v === e[0]);
       if (allSame) {
-        expectedText += `<br><span style="font-size:0.85em;color:var(--color-text-muted);font-weight:normal;display:block;margin-top:4px;">${withNum(e[0])}：全日</span>`;
+        expectedText += `<br><span class="inline-muted-note">${withNum(e[0])}：全日</span>`;
       } else {
         const groups = {};
         for(let i=0; i<7; i++) {
@@ -991,7 +991,7 @@ function runAllChecks(assignments, yearMonth) {
         }
         const formatDays = (days) => days.map(d => DAY_NAMES_JA[d]).join('・');
         const parts = Object.entries(groups).map(([pat, days]) => `${withNum(pat)}：${formatDays(days)}`);
-        expectedText += `<br><span style="font-size:0.85em;color:var(--color-text-muted);font-weight:normal;display:block;margin-top:4px;line-height:1.4;">${parts.join('<br>')}</span>`;
+        expectedText += `<br><span class="inline-muted-note inline-muted-note--pattern">${parts.join('<br>')}</span>`;
       }
     }
 
@@ -1502,7 +1502,7 @@ function renderGantt() {
       isHoliday && 'is-holiday',
     ].filter(Boolean).join(' ');
     const title = isHoliday ? ` title="${isHoliday}"` : '';
-    headHtml += `<th class="${cls}"${title}>${d}<br><span style="font-size:0.55rem">${dayNames[dow]}</span></th>`;
+    headHtml += `<th class="${cls}"${title}>${d}<br><span class="gantt-day-name">${dayNames[dow]}</span></th>`;
   }
   thead.innerHTML = headHtml + '</tr>';
 
@@ -1550,10 +1550,8 @@ function renderGantt() {
       cellColor = 'warn'; // 目標日数に届いていない場合も警告色
     }
 
-    let ngStyle = '';
-    if (cellColor === 'ng') ngStyle = 'background:#fee2e2;color:#dc2626;';
-    else if (cellColor === 'warn') ngStyle = 'background:#fef9c3;color:#a16207;';
-    bodyHtml += `<td class="gantt-summary-col" style="text-align:center;font-weight:700;font-size:0.75rem;${ngStyle}">${summaryLabel}</td>`;
+    const summaryStateClass = cellColor ? ` gantt-summary-col--${cellColor}` : '';
+    bodyHtml += `<td class="gantt-summary-col${summaryStateClass}">${summaryLabel}</td>`;
     for (let d = 1; d <= daysInMonth; d++) {
       const dateStr = `${state.currentYear}-${String(state.currentMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
       const dt = new Date(state.currentYear, state.currentMonth, d);
@@ -1664,7 +1662,7 @@ function renderGantt() {
 
 function renderGanttFooter(daysInMonth, sortedStaff) {
   const tfoot = document.getElementById('gantt-foot');
-  let summaryRow = '<td class="staff-name" style="font-size:0.75rem;">出勤数</td>';
+  let summaryRow = '<td class="staff-name gantt-summary-label">出勤数</td>';
 
   for (let d = 1; d <= daysInMonth; d++) {
     const dateStr = `${state.currentYear}-${String(state.currentMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
@@ -1828,11 +1826,11 @@ function openCellEditor(cell, staff, dateStr) {
 function buildEditorOption(label, value, isActive) {
   let markerHtml = '';
   if (PATTERN_CSS[label]) {
-    markerHtml = `<div class="pattern-marker ${PATTERN_CSS[label]}" style="width:20px;height:20px;font-size:0.45rem;margin:0;">${PATTERN_LABEL[label] || label.substring(0,2)}</div>`;
+    markerHtml = `<div class="pattern-marker ${PATTERN_CSS[label]} mini-pattern-marker">${PATTERN_LABEL[label] || label.substring(0,2)}</div>`;
   } else if (value === '所定休日') {
-    markerHtml = `<div class="pattern-marker pattern-marker--off" style="width:20px;height:20px;font-size:0.45rem;margin:0;">休</div>`;
+    markerHtml = `<div class="pattern-marker pattern-marker--off mini-pattern-marker">休</div>`;
   } else {
-    markerHtml = `<div class="pattern-marker" style="width:20px;height:20px;background:transparent;border:1px solid #ccc;margin:0;"></div>`;
+    markerHtml = `<div class="pattern-marker mini-pattern-marker mini-pattern-marker--empty"></div>`;
   }
 
   const PATTERN_PREFIX = {
