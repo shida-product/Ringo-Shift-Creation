@@ -1629,7 +1629,8 @@ function renderGantt() {
 
 function renderGanttFooter(daysInMonth, sortedStaff) {
   const tfoot = document.getElementById('gantt-foot');
-  let summaryRow = '<td class="staff-name" style="font-size:0.75rem;">出勤数</td>';
+  // ヘッダー・ボディと同じ列順: スタッフ名 → 集計 → 日付…
+  let summaryRow = '<td class="staff-name">出勤数</td><td class="gantt-summary-col"></td>';
 
   for (let d = 1; d <= daysInMonth; d++) {
     const dateStr = `${state.currentYear}-${String(state.currentMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
@@ -1661,8 +1662,6 @@ function renderGanttFooter(daysInMonth, sortedStaff) {
     summaryRow += `<td class="${cellClass}">${getSpan(pharmCount, '薬')}<br>${getSpan(officeCount, '事')}</td>`;
   }
 
-  const summaryCol = '<td class="gantt-summary-col"></td>';
-  summaryRow = summaryRow.replace(/(<td class="staff-name"[^>]*>[^<]*<\/td>)/, '$1' + summaryCol);
   tfoot.innerHTML = `<tr>${summaryRow}</tr>`;
 }
 
