@@ -101,4 +101,4 @@ INSERT INTO ringo_staff (employee_no, name, display_order, role, staff_type, wor
 INSERT INTO ringo_staff (employee_no, name, display_order, role, staff_type, work_conditions) VALUES
   ('15', '野口由美子',   5, 'office', 'part_time', '{}'),
   ('17', '小野寺美桜子', 6, 'office', 'part_time', '{}'),
-  ('19', '笠原若菜',     7, 'office', 'part_time', '{}');
+  ('19', '笠原若葉',     7, 'office', 'part_time', '{}');

@@ -13,7 +13,7 @@ UPDATE ringo_staff SET name = '湯本 有美子' WHERE employee_no = '07';
 UPDATE ringo_staff SET name = '服部 孝子'   WHERE employee_no = '08';
 UPDATE ringo_staff SET name = '野口 由美子' WHERE employee_no = '15';
 UPDATE ringo_staff SET name = '小野寺 美桜子' WHERE employee_no = '17';
-UPDATE ringo_staff SET name = '笠原 若菜'   WHERE employee_no = '19';
+UPDATE ringo_staff SET name = '笠原 若葉'   WHERE employee_no = '19';
 
 -- 確認クエリ
 SELECT employee_no, name FROM ringo_staff ORDER BY employee_no;

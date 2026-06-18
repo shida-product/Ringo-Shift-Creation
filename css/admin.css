@@ -14,6 +14,11 @@
   margin-bottom: 24px;
 }
 
+.admin-actions {
+  margin-top: 32px;
+  text-align: center;
+}
+
 /* ---------- スタッフ追加フォーム ---------- */
 .add-staff-form {
   display: flex;
@@ -116,6 +121,22 @@
   display: flex;
   gap: 6px;
   justify-content: flex-end;
+  margin-left: auto;
+}
+
+.staff-card__tools {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 8px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.staff-list__empty {
+  color: var(--color-text-muted);
+  text-align: center;
+  padding: 40px 0;
 }
 
 /* ---------- 並び替えボタン ---------- */
@@ -144,14 +165,36 @@
   .admin-container {
     padding: 16px 12px 40px;
   }
+  .admin-container h2 {
+    font-size: var(--font-size-lg);
+    margin-bottom: 16px;
+  }
   .add-staff-form {
     flex-direction: column;
   }
   .staff-card {
     padding: 12px 14px;
+    border-radius: var(--radius-md);
   }
   .staff-card__main {
     gap: 6px;
+  }
+  .staff-card__conditions {
+    padding-left: 0;
+    line-height: 1.5;
+  }
+  .staff-card__tools {
+    align-items: flex-start;
+  }
+  .color-swatches {
+    gap: 10px;
+  }
+  .color-swatch {
+    width: 30px;
+    height: 30px;
+  }
+  .admin-actions .btn {
+    width: 100%;
   }
 }
 

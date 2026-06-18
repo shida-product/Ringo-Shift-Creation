@@ -28,35 +28,35 @@
     <!-- 左グループ：タイトル + ナビ -->
     <div class="app-header__left">
       <div class="app-header__title">
-        <i data-lucide="calendar-cog" style="width:20px;height:20px;"></i>
+        <i data-lucide="calendar-cog" class="icon-xl"></i>
         <span class="app-title-text">シフト生成</span>
       </div>
       <div class="header-divider"></div>
       <nav class="app-header__nav">
-        <a href="index.html" class="app-header__link"><i data-lucide="calendar" style="width:16px;height:16px;"></i> 希望休</a>
-        <a href="admin.html" class="app-header__link"><i data-lucide="palette" style="width:16px;height:16px;"></i> 設定</a>
+        <a href="index.html" class="app-header__link"><i data-lucide="calendar" class="icon-md"></i> 希望休</a>
+        <a href="admin.html" class="app-header__link"><i data-lucide="palette" class="icon-md"></i> 設定</a>
       </nav>
     </div>
 
     <!-- 中央：月ナビ -->
-    <div class="month-nav" style="margin: 0 auto;">
-      <button class="month-nav__btn" id="prev-month" aria-label="前月" type="button"><i data-lucide="chevron-left" style="width:18px;height:18px;"></i></button>
-      <span class="month-nav__label" id="month-label" title="クリックして月を選択" style="cursor: pointer; user-select: none;"></span>
-      <button class="month-nav__btn" id="next-month" aria-label="次月" type="button"><i data-lucide="chevron-right" style="width:18px;height:18px;"></i></button>
+    <div class="month-nav month-nav--center">
+      <button class="month-nav__btn" id="prev-month" aria-label="前月" type="button"><i data-lucide="chevron-left" class="icon-lg"></i></button>
+      <span class="month-nav__label month-nav__label--clickable" id="month-label" title="クリックして月を選択"></span>
+      <button class="month-nav__btn" id="next-month" aria-label="次月" type="button"><i data-lucide="chevron-right" class="icon-lg"></i></button>
       <button class="month-nav__today-btn" id="today-month-btn" title="今月に戻る" style="display:none;">今月へ戻る</button>
     </div>
 
     <!-- 右グループ：凡例・アクション・ログアウト -->
     <div class="app-header__right">
       <!-- 凡例 -->
-      <div class="legend legend--chips" id="legend" aria-label="表示の凡例" style="align-items: center;">
-        <span style="font-size: 0.75rem; font-weight: 700; color: var(--color-text-secondary); margin-right: 4px;">勤務パターン:</span>
+      <div class="legend legend--chips" id="legend" aria-label="表示の凡例">
+        <span class="legend__label">勤務パターン:</span>
         <div class="legend__item"><span class="legend__dot legend__dot--full"></span>終日</div>
         <div class="legend__item"><span class="legend__dot legend__dot--am"></span>午前</div>
         <div class="legend__item"><span class="legend__dot legend__dot--pm"></span>午後</div>
         <div class="legend__item"><span class="legend__dot legend__dot--off"></span>所定休</div>
-        <span style="border-left:1px solid var(--color-border); height: 20px; margin:0 8px;"></span>
-        <span style="font-size: 0.75rem; font-weight: 700; color: var(--color-text-secondary); margin-right: 4px;">シフト希望:</span>
+        <span class="inline-separator"></span>
+        <span class="legend__label">シフト希望:</span>
         <div class="legend__item"><span class="legend__dot legend__dot--virtual"></span>固定休</div>
         <div class="legend__item"><span class="legend__dot legend__dot--stripe-off"></span>休み</div>
         <div class="legend__item"><span class="legend__dot legend__dot--stripe-other"></span>コメント等</div>
@@ -65,30 +65,30 @@
       <div class="header-divider"></div>
 
       <!-- アクションボタン -->
-      <div class="toolbar__actions" style="display:flex; gap:8px; align-items:center;">
-        <button class="btn btn--primary btn--generate btn--sm" id="btn-generate" type="button" style="padding: 6px 12px;">
-          <i data-lucide="sparkles" style="width:16px;height:16px;"></i> シフト生成
+      <div class="toolbar__actions">
+        <button class="btn btn--primary btn--generate btn--sm btn--compact" id="btn-generate" type="button">
+          <i data-lucide="sparkles" class="icon-md"></i> シフト生成
         </button>
-        <span style="border-left:1px solid var(--color-border);height:24px;"></span>
-        <button class="btn btn--outline btn--sm" id="btn-reset" type="button" disabled title="生成直後の状態に戻す" style="padding:6px 8px;">
-          <i data-lucide="rotate-ccw" style="width:14px;height:14px;"></i>
+        <span class="toolbar-divider"></span>
+        <button class="btn btn--outline btn--sm btn--icon" id="btn-reset" type="button" disabled title="生成直後の状態に戻す">
+          <i data-lucide="rotate-ccw" class="icon-xs"></i>
         </button>
-        <button class="btn btn--outline btn--sm" id="btn-undo" type="button" disabled title="元に戻す (Undo)" style="padding:6px 8px;">
-          <i data-lucide="undo-2" style="width:14px;height:14px;"></i>
+        <button class="btn btn--outline btn--sm btn--icon" id="btn-undo" type="button" disabled title="元に戻す (Undo)">
+          <i data-lucide="undo-2" class="icon-xs"></i>
         </button>
-        <button class="btn btn--outline btn--sm" id="btn-redo" type="button" disabled title="やり直し (Redo)" style="padding:6px 8px;">
-          <i data-lucide="redo-2" style="width:14px;height:14px;"></i>
+        <button class="btn btn--outline btn--sm btn--icon" id="btn-redo" type="button" disabled title="やり直し (Redo)">
+          <i data-lucide="redo-2" class="icon-xs"></i>
         </button>
-        <span style="border-left:1px solid var(--color-border);height:24px;"></span>
-        <button class="btn btn--outline btn--sm" id="btn-csv" type="button" disabled style="padding: 6px 12px;">
-          <i data-lucide="download" style="width:16px;height:16px;"></i> CSV
+        <span class="toolbar-divider"></span>
+        <button class="btn btn--outline btn--sm btn--compact" id="btn-csv" type="button" disabled>
+          <i data-lucide="download" class="icon-md"></i> CSV
         </button>
       </div>
 
       <div class="header-divider"></div>
 
       <button id="btn-logout" class="app-header__logout">
-        <i data-lucide="log-out" style="width:15px;height:15px;"></i> ログアウト
+        <i data-lucide="log-out" class="icon-sm"></i> ログアウト
       </button>
     </div>
   </header>
@@ -96,9 +96,9 @@
   <main class="main-container">
 
     <!-- ガントチャート -->
-    <div class="card-surface gantt-wrapper" id="gantt-wrapper" style="padding: 0;">
+    <div class="card-surface gantt-wrapper" id="gantt-wrapper">
       <div class="gantt-placeholder" id="gantt-placeholder">
-        <span class="gantt-placeholder__icon-wrap" aria-hidden="true"><i data-lucide="calendar-plus" style="width:40px;height:40px;"></i></span>
+        <span class="gantt-placeholder__icon-wrap" aria-hidden="true"><i data-lucide="calendar-plus" class="icon-hero"></i></span>
         <p class="gantt-placeholder__text">月を選択して「<strong>シフト生成</strong>」を押すと、ここにカレンダーが表示されます</p>
       </div>
       <table class="gantt-table" id="gantt-table" style="display:none;">
@@ -112,11 +112,11 @@
     <div class="other-reqs-accordion" id="other-reqs-accordion" style="display:none;">
       <div class="other-reqs-accordion__header" id="other-reqs-header">
         <span class="other-reqs-accordion__title-icon" aria-hidden="true">
-          <i data-lucide="message-square-warning" style="width:18px;height:18px;"></i>
+          <i data-lucide="message-square-warning" class="icon-lg"></i>
         </span>
         <span class="other-reqs-accordion__title">条件付き・その他の希望</span>
         <span class="other-reqs-accordion__count" id="other-reqs-count">0件</span>
-        <svg class="other-reqs-accordion__chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-left: auto;"><polyline points="6 9 12 15 18 9"/></svg>
+        <svg class="other-reqs-accordion__chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
       </div>
       <div class="other-reqs-accordion__body">
         <div class="other-list__items" id="other-reqs-list"></div>
@@ -126,11 +126,11 @@
     <!-- 条件チェックパネル -->
     <div class="card-surface conditions-panel" id="conditions-panel" style="display:none;" role="region" aria-labelledby="conditions-heading">
       <div class="conditions-panel__title" id="conditions-heading">
-        <span class="conditions-panel__title-icon" aria-hidden="true"><i data-lucide="clipboard-check" style="width:18px;height:18px;"></i></span>
+        <span class="conditions-panel__title-icon" aria-hidden="true"><i data-lucide="clipboard-check" class="icon-lg"></i></span>
         <span class="conditions-panel__title-text">条件チェック</span>
         <span class="conditions-header-badge" id="conditions-header-badge"></span>
       </div>
-      <div style="font-size: 0.75rem; color: var(--color-text-muted); margin-top: -4px; margin-bottom: 12px; border-bottom: 1px solid var(--color-border); padding-bottom: 8px;">
+      <div class="conditions-pattern-note">
         【勤務パターン】 ①〇午前 ②〇午前（掃除） ③〇日曜 ④〇日曜（掃除） ⑤〇終日 ⑥終日（掃除） ⑦湯本午後
       </div>
       <div class="conditions-panel__cards" id="conditions-grid"></div>

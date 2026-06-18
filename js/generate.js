@@ -1,4 +1,4 @@
-﻿/**
+/**
  * シフト生成 メインロジック
  * - シフト自動生成アルゴリズム（ルールベース貪欲法）
  * - ガントチャート描画
@@ -41,7 +41,7 @@ const PATTERNS = {
   SUN: '◯日曜',             // 09:00-12:30
   SUN_CLEAN: '◯日曜（掃除）',// 08:50-12:30
   FULL: '◯終日',             // 09:00-18:30
-  FULL_CLEAN: '終日（掃除）', // 08:50-18:30
+  FULL_CLEAN: '◯終日（掃除）', // 08:50-18:30
   PM: '◯午後',               // 午後のみ
   PM_YUMOTO: '湯本午後'       // 14:45-18:15
 };
@@ -52,7 +52,7 @@ const PATTERN_CSS = {
   '◯日曜': 'pattern-marker--am',
   '◯日曜（掃除）': 'pattern-marker--am',
   '◯終日': 'pattern-marker--full',
-  '終日（掃除）': 'pattern-marker--full',
+  '◯終日（掃除）': 'pattern-marker--full',
   '◯午後': 'pattern-marker--pm',
   '湯本午後': 'pattern-marker--pm',
   'りんご': 'pattern-marker--ringo',
@@ -66,7 +66,7 @@ const PATTERN_DOT_CLASS = {
   '◯日曜': 'legend__dot--am',
   '◯日曜（掃除）': 'legend__dot--am',
   '◯終日': 'legend__dot--full',
-  '終日（掃除）': 'legend__dot--full',
+  '◯終日（掃除）': 'legend__dot--full',
   '◯午後': 'legend__dot--pm',
   '湯本午後': 'legend__dot--pm',
   'りんご': 'legend__dot--ringo',
@@ -80,13 +80,48 @@ const PATTERN_LABEL = {
   '◯日曜': '午前',
   '◯日曜（掃除）': '午前',
   '◯終日': '終日',
-  '終日（掃除）': '終日',
+  '◯終日（掃除）': '終日',
   '◯午後': '午後',
   '湯本午後': '午後',
   'りんご': 'り',
   '出張': '出張',
   '応援': '応援',
 };
+
+function normalizeWorkPattern(pattern) {
+  if (!pattern) return '';
+  const normalizedCircle = pattern.replace(/^〇/, '◯');
+  if (normalizedCircle === '終日（掃除）') return PATTERNS.FULL_CLEAN;
+  return normalizedCircle;
+}
+
+function normalizeAssignmentWorkPatterns(assignments) {
+  return (assignments || []).map(a => ({
+    ...a,
+    date: normalizeDateKey(a.date),
+    work_pattern: normalizeWorkPattern(a.work_pattern)
+  }));
+}
+
+function normalizeDateKey(value) {
+  if (!value) return '';
+  if (typeof value === 'string') return value.slice(0, 10);
+  if (value instanceof Date) return formatDate(value);
+  return String(value).slice(0, 10);
+}
+
+function normalizeStaffNameForCSV(staff) {
+  if (staff?.employee_no === '19' && staff.name.includes('笠原')) {
+    return '笠原 若葉';
+  }
+  return staff?.name || '';
+}
+
+function countCSVWorkPatterns(assignments, yearMonth) {
+  return (assignments || []).filter(a =>
+    normalizeDateKey(a.date).startsWith(yearMonth) && normalizeWorkPattern(a.work_pattern)
+  ).length;
+}
 
 const EXPECTED_PATTERNS = {
   '野口': { 0: PATTERNS.SUN_CLEAN, 1: PATTERNS.FULL_CLEAN, 2: PATTERNS.FULL_CLEAN, 3: PATTERNS.FULL_CLEAN, 4: PATTERNS.FULL_CLEAN, 5: PATTERNS.FULL_CLEAN, 6: PATTERNS.AM_CLEAN },
@@ -383,7 +418,7 @@ function renderMonthPickerGrid() {
   grid.innerHTML = MONTH_LABELS.map((label, i) => {
     const isCurrent = (pickerYear === state.currentYear && i === state.currentMonth);
     const isDisabled = (pickerYear < 2026 || pickerYear > 2026 || (pickerYear === 2026 && i < 4));
-    const attr = isDisabled ? ' disabled style="opacity:0.3;cursor:not-allowed;"' : '';
+    const attr = isDisabled ? ' disabled' : '';
     return `<button class="month-picker__month-btn${isCurrent ? ' is-current' : ''}" data-month="${i}"${attr}>${label}</button>`;
   }).join('');
   grid.querySelectorAll('.month-picker__month-btn:not([disabled])').forEach(btn => {
@@ -495,7 +530,7 @@ function renderOtherList() {
   accordion.style.display = '';
 
   if (grouped.length === 0) {
-    listEl.innerHTML = '<p style="font-size:var(--font-size-sm);color:var(--color-text-muted);padding:8px 0;">条件付き希望はありません</p>';
+    listEl.innerHTML = '<p class="other-reqs-empty">条件付き希望はありません</p>';
     return;
   }
 
@@ -655,7 +690,7 @@ async function loadExistingAssignments() {
     console.error('Error loading assignments:', error);
     state.assignments = [];
   } else {
-    state.assignments = data || [];
+    state.assignments = normalizeAssignmentWorkPatterns(data);
   }
 
   if (state.assignments.length > 0) {
@@ -673,7 +708,7 @@ async function loadExistingAssignments() {
       state.history = localData.history;
       state.historyIndex = localData.historyIndex ?? (localData.history.length - 1);
       // DBよりもローカルの最新履歴（未保存状態など）を優先して復元する
-      state.assignments = cloneAssignments(state.history[state.historyIndex]);
+      state.assignments = normalizeAssignmentWorkPatterns(cloneAssignments(state.history[state.historyIndex]));
       // もしDBと同期させたい場合はここでsaveAssignmentsを呼ぶのもあり
     } else {
       state.baselineAssignments = cloneAssignments(state.assignments);
@@ -754,7 +789,7 @@ async function handleGenerate() {
     showToast('生成エラー: ' + err.message, 'error');
   } finally {
     btn.disabled = false;
-    btn.innerHTML = '<i data-lucide="sparkles" style="width:16px;height:16px;"></i> シフト生成';
+    btn.innerHTML = '<i data-lucide="sparkles" class="icon-md"></i> シフト生成';
     lucide.createIcons();
   }
 }
@@ -940,13 +975,13 @@ function runAllChecks(assignments, yearMonth) {
       const e = staffExpected;
       const PATTERN_PREFIX = {
         '◯午前': '①', '◯午前（掃除）': '②', '◯日曜': '③', '◯日曜（掃除）': '④',
-        '◯終日': '⑤', '終日（掃除）': '⑥', '湯本午後': '⑦', '◯午後': '⑧'
+        '◯終日': '⑤', '◯終日（掃除）': '⑥', '湯本午後': '⑦', '◯午後': '⑧'
       };
       const withNum = (pat) => (PATTERN_PREFIX[pat] || '') + pat;
 
       const allSame = Object.values(e).every(v => v === e[0]);
       if (allSame) {
-        expectedText += `<br><span style="font-size:0.85em;color:var(--color-text-muted);font-weight:normal;display:block;margin-top:4px;">${withNum(e[0])}：全日</span>`;
+        expectedText += `<br><span class="inline-muted-note">${withNum(e[0])}：全日</span>`;
       } else {
         const groups = {};
         for(let i=0; i<7; i++) {
@@ -956,7 +991,7 @@ function runAllChecks(assignments, yearMonth) {
         }
         const formatDays = (days) => days.map(d => DAY_NAMES_JA[d]).join('・');
         const parts = Object.entries(groups).map(([pat, days]) => `${withNum(pat)}：${formatDays(days)}`);
-        expectedText += `<br><span style="font-size:0.85em;color:var(--color-text-muted);font-weight:normal;display:block;margin-top:4px;line-height:1.4;">${parts.join('<br>')}</span>`;
+        expectedText += `<br><span class="inline-muted-note inline-muted-note--pattern">${parts.join('<br>')}</span>`;
       }
     }
 
@@ -1467,7 +1502,7 @@ function renderGantt() {
       isHoliday && 'is-holiday',
     ].filter(Boolean).join(' ');
     const title = isHoliday ? ` title="${isHoliday}"` : '';
-    headHtml += `<th class="${cls}"${title}>${d}<br><span style="font-size:0.55rem">${dayNames[dow]}</span></th>`;
+    headHtml += `<th class="${cls}"${title}>${d}<br><span class="gantt-day-name">${dayNames[dow]}</span></th>`;
   }
   thead.innerHTML = headHtml + '</tr>';
 
@@ -1515,10 +1550,8 @@ function renderGantt() {
       cellColor = 'warn'; // 目標日数に届いていない場合も警告色
     }
 
-    let ngStyle = '';
-    if (cellColor === 'ng') ngStyle = 'background:#fee2e2;color:#dc2626;';
-    else if (cellColor === 'warn') ngStyle = 'background:#fef9c3;color:#a16207;';
-    bodyHtml += `<td class="gantt-summary-col" style="text-align:center;font-weight:700;font-size:0.75rem;${ngStyle}">${summaryLabel}</td>`;
+    const summaryStateClass = cellColor ? ` gantt-summary-col--${cellColor}` : '';
+    bodyHtml += `<td class="gantt-summary-col${summaryStateClass}">${summaryLabel}</td>`;
     for (let d = 1; d <= daysInMonth; d++) {
       const dateStr = `${state.currentYear}-${String(state.currentMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
       const dt = new Date(state.currentYear, state.currentMonth, d);
@@ -1526,7 +1559,7 @@ function renderGantt() {
       const isEbisuClosed = isSunday;
 
       const assign = state.assignments.find(a => a.staff_id === staff.id && a.date === dateStr);
-      const pattern = assign?.work_pattern || '';
+      const pattern = normalizeWorkPattern(assign?.work_pattern);
       const attendance = assign?.attendance_type || '平日';
       const isManual = assign?.is_manual_override || false;
 
@@ -1630,7 +1663,7 @@ function renderGantt() {
 function renderGanttFooter(daysInMonth, sortedStaff) {
   const tfoot = document.getElementById('gantt-foot');
   // ヘッダー・ボディと同じ列順: スタッフ名 → 集計 → 日付…
-  let summaryRow = '<td class="staff-name">出勤数</td><td class="gantt-summary-col"></td>';
+  let summaryRow = '<td class="staff-name gantt-summary-label">出勤数</td><td class="gantt-summary-col"></td>';
 
   for (let d = 1; d <= daysInMonth; d++) {
     const dateStr = `${state.currentYear}-${String(state.currentMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
@@ -1792,11 +1825,11 @@ function openCellEditor(cell, staff, dateStr) {
 function buildEditorOption(label, value, isActive) {
   let markerHtml = '';
   if (PATTERN_CSS[label]) {
-    markerHtml = `<div class="pattern-marker ${PATTERN_CSS[label]}" style="width:20px;height:20px;font-size:0.45rem;margin:0;">${PATTERN_LABEL[label] || label.substring(0,2)}</div>`;
+    markerHtml = `<div class="pattern-marker ${PATTERN_CSS[label]} mini-pattern-marker">${PATTERN_LABEL[label] || label.substring(0,2)}</div>`;
   } else if (value === '所定休日') {
-    markerHtml = `<div class="pattern-marker pattern-marker--off" style="width:20px;height:20px;font-size:0.45rem;margin:0;">休</div>`;
+    markerHtml = `<div class="pattern-marker pattern-marker--off mini-pattern-marker">休</div>`;
   } else {
-    markerHtml = `<div class="pattern-marker" style="width:20px;height:20px;background:transparent;border:1px solid #ccc;margin:0;"></div>`;
+    markerHtml = `<div class="pattern-marker mini-pattern-marker mini-pattern-marker--empty"></div>`;
   }
 
   const PATTERN_PREFIX = {
@@ -1805,7 +1838,7 @@ function buildEditorOption(label, value, isActive) {
     '◯日曜': '③',
     '◯日曜（掃除）': '④',
     '◯終日': '⑤',
-    '終日（掃除）': '⑥',
+    '◯終日（掃除）': '⑥',
     '湯本午後': '⑦',
     '◯午後': '⑧'
   };
@@ -1824,8 +1857,33 @@ function buildEditorOption(label, value, isActive) {
 // ============================================================
 // CSV出力（Shift-JIS）
 // ============================================================
-function handleCSVExport() {
+async function ensureAssignmentsForCSV(yearMonth) {
+  if (countCSVWorkPatterns(state.assignments, yearMonth) > 0) return true;
+
+  const { data, error } = await supabase
+    .from('ringo_shift_assignments')
+    .select('*')
+    .eq('year_month', yearMonth);
+
+  if (error) {
+    console.error('Error reloading assignments for CSV:', error);
+    showToast('CSV出力用のシフト取得に失敗しました', 'error');
+    return false;
+  }
+
+  if (data && data.length > 0) {
+    state.assignments = normalizeAssignmentWorkPatterns(data);
+    if (countCSVWorkPatterns(state.assignments, yearMonth) > 0) return true;
+  }
+
+  showToast('勤務パターンが未作成または未保存です。先にシフトを生成・保存してください。', 'error');
+  return false;
+}
+
+async function handleCSVExport() {
   const yearMonth = getCurrentYearMonth();
+  if (!(await ensureAssignmentsForCSV(yearMonth))) return;
+
   const [year, month] = yearMonth.split('-').map(Number);
   const daysInMonth = new Date(year, month, 0).getDate();
 
@@ -1843,15 +1901,16 @@ function handleCSVExport() {
 
   for (const staff of sortedStaff) {
     // 名前を姓名に分割（半角・全角スペースのどちらでも対応）
-    const nameParts = staff.name.trim().split(/[\s\u3000]+/);
-    const lastName = nameParts[0] || staff.name;
+    const csvStaffName = normalizeStaffNameForCSV(staff);
+    const nameParts = csvStaffName.trim().split(/[\s\u3000]+/);
+    const lastName = nameParts[0] || csvStaffName;
     const firstName = nameParts.slice(1).join('') || '';
 
     for (let d = 1; d <= daysInMonth; d++) {
       const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-      const assign = state.assignments.find(a => a.staff_id === staff.id && a.date === dateStr);
+      const assign = state.assignments.find(a => a.staff_id === staff.id && normalizeDateKey(a.date) === dateStr);
       let attendance = assign?.attendance_type || '平日';
-      const pattern = assign?.work_pattern || '';
+      const pattern = normalizeWorkPattern(assign?.work_pattern);
 
       // CSV出力時のみ、CSV_WEEKDAY_REQUEST_TYPES以外の希望が出ている日は「所定休日」として出力
       if (attendance === '所定休日') {
