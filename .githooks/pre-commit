@@ -1,0 +1,10 @@
+#!/bin/sh
+# Keystone中央ハーネスの薄いpre-commitシム。実装はC:/dev/keystone/bin/を参照する。
+KEYSTONE_HOME="${KEYSTONE_HOME:-C:/dev/keystone}"
+if ! command -v node >/dev/null 2>&1; then echo "error: node が見つかりません。"; exit 1; fi
+if [ ! -f "$KEYSTONE_HOME/bin/lint-encoding.cjs" ]; then echo "error: Keystoneが見つかりません: $KEYSTONE_HOME"; exit 1; fi
+node "$KEYSTONE_HOME/bin/lint-encoding.cjs" --staged
+rc=$?
+if git diff --cached --name-only --diff-filter=ACMR | grep -qE '^\\.agents/lessons'; then node "$KEYSTONE_HOME/bin/check-lesson-counts.cjs" || rc=1; fi
+exit $rc
+
