@@ -1,26 +1,13 @@
-﻿# りんごちゃん薬局 シフト作成ツール — AI Agent 行動規範 & プロジェクトガイド
+# りんごちゃん薬局 シフト作成ツール — AI Agent 行動規範 & プロジェクトガイド
 
-> このファイルは、AIエージェントがこのプロジェクトで作業する際の **思考基盤（Instincts）と行動ルール（Rules）の唯一の起点** です。
+> このファイルは、AIエージェントがこのプロジェクトで作業する際の **固有の製品規則と作業別routing** です。
 > Claude Code 等のエージェントは新セッション開始時に自動でこのファイルをロードします。
 
 ---
 
-## ⚡ セッション開始時の必須アクション
+## セッション開始
 
-新しいセッションが始まったら、必ず以下の2ファイルを最初に読み込むこと。
-
-```
-.agents/handover.md    ← 前回の作業状態・ネクストアクション（ライブ状態のみ）
-.agents/lessons.md     ← Critical Rules と教訓カテゴリ索引（必読サマリ）
-```
-
-**読み込まなくてよい（指示時のみオンデマンド）**：
-- `.agents/changelog.md`：過去の作業履歴。経緯調査が必要なときだけ。
-- `.agents/lessons/<category>.md`：詳細教訓。着手ドメインに応じて該当カテゴリのみロード（下記 §4 参照）。
-- `.agents/workflows/<...>.md`：作業ワークフロー。着手前に該当のみロード（§4 参照）。
-- `.agents/skills/<...>.md`：特定スキルセット強化用。指定された場合のみロード。
-
----
+[AGENTS.md](AGENTS.md)の開始・再開・終了条件に従う。このファイルの固有安全条件と作業別routingは維持する。
 
 ## 1. プロジェクト概要
 
@@ -43,7 +30,7 @@
 
 - [要件定義](docs/ringo-requirements.md)：スタッフ構成・勤務条件・シフトルール（**最新の正本**）
 - [制約条件一覧](docs/shift-generation-requirements.md)：ハード制約・ソフト制約・チェック項目
-- [作業ログ・変更ログ](../りんご：シフト作成/.agents/changelog.md)：AIセッション履歴 + シフト生成ロジック変更ログ（`.agents/changelog.md` に統合）
+- [作業ログ・変更ログ](.agents/changelog.md)：AIセッション履歴 + シフト生成ロジック変更ログ（`.agents/changelog.md` に統合）
 
 ### 画面構成
 
@@ -66,7 +53,7 @@
 - **Design Driven**: フロントエンド改修時にHEX値や独自ピクセル幅を発明しない。必ず `.agents/workflows/css-conventions.md` を確認してから実装する。
 - **WCAG 2.2 Accessibility**: タップ/クリック要素は最低 24×24 CSSピクセル（主要アクションは 44px 以上推奨）。モバイルでの誤操作（Fat-finger problem）を防止する。
 - **Simplicity First & Minimal Impact**: 変更は外科手術のようにピンポイントで。触る必要のない箇所には一切触れない。
-- **Stop & Report**: 10ステップ以上連続でツール（ファイル編集・コマンド実行など）を自動実行したら強制停止し、ユーザーへ「完了した作業」「現在の状況」「次のアクションの承認」を報告する。
+- **Progress & Boundary**: 進捗を報告し、承認・依存の境界で確認する。ツール回数だけで停止・再承認しない。
 - **Assumption-Free**: generate.js のアルゴリズム・テーブル構造・データフローは推測でコードを書かない。必ず既存ファイルを Grep / Read で確認してから実装する（`generate.js` は110KB超の大規模ファイル）。
 
 ---
@@ -78,7 +65,7 @@
 | **The Architect** / `/plan` | シフト生成アルゴリズム設計・DB変更・根本リファクタリング | 即時コーディングを差し控え、実装計画書を提示。ユーザーの承認まで実装ブロック |
 | **The Visual Perfectionist** / `/review` | UI/UX構築・CSS/JS修正 | `.agents/workflows/css-conventions.md` に完全整合したコードのみ出力。モバイル崩れを自ら発見・修正 |
 | **The Security Auditor** / `/security` | Supabase接続・フォーム・APIエンドポイント実装 | 接続情報漏洩・Row Level Security 設定・入力サニタイズを強制 |
-| **The Context Manager** / `/handoff` | 作業終了・大きな要件の達成時 | `.agents/handover.md` を更新。翌日のAIが5秒で再開できるレベルに圧縮して保存 |
+| **The Context Manager** / `/handoff` | 作業終了・大きな要件の達成時 | `.agents/handover.md` を復元不能な判断・人間待ち・外部状態が変わった場合に更新 |
 
 ---
 
@@ -100,7 +87,7 @@
 
 ### 4-2. 教訓カテゴリ（積み上げアーカイブ）
 
-`.agents/lessons.md` の Critical Rules は毎セッション読み込まれるが、**詳細教訓は着手ドメインに応じて該当カテゴリだけ** ロードする。
+`.agents/lessons.md` の Critical Rules は変更領域に応じて取得し、**詳細教訓は着手ドメインに応じて該当カテゴリだけ** ロードする。
 
 | 着手内容 | 読み込むファイル |
 |---|---|
