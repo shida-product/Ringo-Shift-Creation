@@ -69,7 +69,8 @@ AGENTS.md / CLAUDE.md       開発・運用ルール
 ## 開発・保守時の注意
 
 - ローカル検証にはテスト用のSupabase環境を使用し、本番DBやスタッフの希望情報を勝手に操作しないでください
-- `sql/enable_rls.sql` は旧方式向けの**匿名アクセス全許可**設定を含みます。一方で `sql/02_enable_rls.sql` は認証ユーザーに限定する設定を記述しています。双方の存在は本番適用状態を示しません。本番RLSの現状を確認し、旧SQLを無条件に再適用しないでください
+- **本番のRLS（2026-10-24 にユーザーが SQL Editor で適用・確認）**: `ringo_staff` / `ringo_shift_requests` / `ringo_shift_assignments` に残るポリシーは `Allow access to Ringo user on <table>`（authenticated かつ email = `ringo@shift.com`）だけです。public 全許可・authenticated 全許可のポリシーは削除し、anon の権限は revoke 済み（未ログインは permission denied）。新規サインアップは無効です。現行定義は `sql/02_enable_rls.sql`
+- `sql/enable_rls.sql` は廃止した旧定義（全許可）の置き場で、本文は削除済みです。git 履歴から旧SQLを再適用しないでください
 - `docs/shift-generation-requirements.md` には旧スタッフ体制の記述が残っています。条件変更時は `docs/ringo-requirements.md` と現行コード・DB設定を照合してください
 - `js/admin.js` の表示色設定にはブラウザの `localStorage` を用いる部分があります。すべての管理設定がDB同期されると推測しないでください
 - 実スタッフの氏名・勤務条件がコード・ドキュメントに含まれています。デモ・営業資料には架空のデータを使い、公開情報やアクセス権を見直してください
@@ -77,4 +78,4 @@ AGENTS.md / CLAUDE.md       開発・運用ルール
 
 ## 状態・検証範囲
 
-`.agents/handover.md` では2026-06-18時点で本番運用・保守フェーズと記録されています。また運用者から現在も毎月使用していることを確認済みです。今回のREADME作成ではコード／ドキュメントを読み取ったのみで、ローカル・実機テスト、本番RLSの検証、CSV実取込、現在のデプロイ先の検証は行っていません。
+`.agents/handover.md` では2026-06-18時点で本番運用・保守フェーズと記録されています。また運用者から現在も毎月使用していることを確認済みです。今回のREADME作成ではコード／ドキュメントを読み取ったのみで、ローカル・実機テスト、CSV実取込、現在のデプロイ先の検証は行っていません。本番RLSは 2026-10-24 にユーザーが SQL Editor で確認しています（上記）。
