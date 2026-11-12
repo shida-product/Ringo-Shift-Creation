@@ -1,0 +1,34 @@
+name: Supabase Keep Alive (自動停止防止)
+
+on:
+  # 定期実行：毎週月曜と木曜の午前9時(JST) = UTCで午前0時
+  schedule:
+    - cron: '0 0 * * 1,4'
+  # 手動実行用：GitHubの画面から「Run workflow」ボタンでいつでも手動テスト可能に
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  keep-alive:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase API
+        env:
+          # 値は GitHub Secrets（Settings → Secrets and variables → Actions）で管理する
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
+            echo "::error::Secrets SUPABASE_URL / SUPABASE_ANON_KEY が未設定です。Settings → Secrets and variables → Actions で登録してください。"
+            exit 1
+          fi
+
+          echo "Sending keep-alive request to Supabase..."
+          # --fail で HTTP 4xx/5xx を失敗として検出する（従来は常に成功表示だった）
+          # テーブルは RLS と権限で anon から読めないため、Auth の health を叩く
+          curl -sS --fail -o /dev/null -X GET "${SUPABASE_URL%/}/auth/v1/health" \
+            -H "apikey: $SUPABASE_ANON_KEY"
+
+          echo "Keep-alive ping successful!"

@@ -14,6 +14,15 @@ import {
   isMonthInWindow,
   clampToMonthWindow,
 } from './month-window.js';
+import {
+  createRequestSnapshot,
+  enumerateDates,
+  getRemovedRequestIds,
+  getRequestChanges,
+  findRequestInDates,
+  hasUniformRequests,
+  resolveEditingSource,
+} from './request-edit.js';
 
 // ============================================================
 // スタッフカラーパレット（個人別色分け・カレンダー表示用）
@@ -136,7 +145,11 @@ const state = {
   editingDates: [],
   editingStaffId: null,
   editingRequest: null,
+  editingMode: 'edit',   // 'edit'=既存の希望を開いた / 'create'=新規登録
   effectiveRequests: [], // DBの希望休 + 固定休の仮想データをマージしたもの
+  // change_history カラム（sql/add_shift_request_change_history.sql）が未適用のDBでは
+  // 書き込みに含めると失敗するため、未適用を検知したら履歴なしで保存する
+  changeHistorySupported: true,
 };
 
 // ============================================================
@@ -216,7 +229,7 @@ function bindEvents() {
 
   // FAB：今日の日付でモーダルを開く
   document.getElementById('fab-add').addEventListener('click', () => {
-    openModal(state.selectedStaffId, [formatDate(new Date())]);
+    openModal(state.selectedStaffId || state.staffList[0]?.id, [formatDate(new Date())], 'create');
   });
 
   // 画面回転・リサイズ対応
@@ -419,13 +432,16 @@ async function loadRequests() {
 
   const { data, error } = await supabase
     .from('ringo_shift_requests')
-    .select('id, staff_id, date, request_type, note, created_at, updated_at')
+    // change_history は未適用DBでも落ちないよう列指定せず * で取る
+    .select('*')
     .gte('date', startDateStr)
     .lte('date', endDateStr);
 
   if (error) {
+    // 取得失敗を「0件」として描画すると希望休が消えたように見えるため、表示中のデータを保持する
     console.error('Error loading requests:', error);
-    state.requests = [];
+    alert('希望休の取得に失敗しました。通信状況を確認して再読み込みしてください。');
+    return;
   } else {
     // 無効化（退職等）したスタッフの希望はガントに行がなく、カレンダーでは名前不明の「?」になるため、
     // 在籍スタッフ分だけ扱う（DB上のデータは削除しない）
@@ -789,7 +805,12 @@ function renderCalendar() {
         let inlineStyle = `background:${bg};color:${text};`;
 
         if (r.is_virtual) {
-          inlineStyle = `background:transparent; color:${bg}; box-shadow: inset 0 0 0 1px ${bg};`;
+          // 枠線（固定休）は四辺に線を引くと連日の境目に縦線が出るため、
+          // バーの途中では左右の線を省き、1本のバーとしてつながって見えるようにする
+          const shadows = [`inset 0 1px 0 0 ${bg}`, `inset 0 -1px 0 0 ${bg}`];
+          if (!prevReq) shadows.push(`inset 1px 0 0 0 ${bg}`);
+          if (!nextReq) shadows.push(`inset -1px 0 0 0 ${bg}`);
+          inlineStyle = `background:transparent; color:${bg}; box-shadow: ${shadows.join(', ')};`;
         }
 
         eventsHtml += `<span class="cal-evt${extraCls}" style="${inlineStyle}">${escapeHtml(lastName + typeLabel)}</span>`;
@@ -886,7 +907,7 @@ function showDayDetail(dateStr) {
   // 新規登録ボタン → 登録モーダル（選択中スタッフ or 先頭スタッフ）
   document.getElementById('bottom-sheet-add').addEventListener('click', () => {
     closeBottomSheet();
-    openModal(state.selectedStaffId || state.staffList[0]?.id, [dateStr]);
+    openModal(state.selectedStaffId || state.staffList[0]?.id, [dateStr], 'create');
   });
 }
 
@@ -1051,9 +1072,20 @@ function renderOtherList() {
 // ============================================================
 
 
-function openModal(staffId, dates) {
+// 希望休を入力できる日付範囲（開放月の初日〜最終日）
+function getRequestDateRange() {
+  const { min, max } = getMonthWindow();
+  return {
+    min: formatDate(new Date(min.year, min.month, 1)),
+    max: formatDate(new Date(max.year, max.month + 1, 0)),
+  };
+}
+
+// mode: 'edit'=既存の希望（ガント・カレンダー・一覧）から開いた / 'create'=新規登録ボタンから開いた
+function openModal(staffId, dates, mode = 'edit') {
   state.editingStaffId = staffId;
   state.editingDates = dates;
+  state.editingMode = mode;
 
   const staffSelect = document.getElementById('modal-staff-select');
   staffSelect.innerHTML = '';
@@ -1086,8 +1118,16 @@ function openModal(staffId, dates) {
   startInput.value = startDate;
   endInput.value = endDate;
 
-  // 複数日でも先頭日付に既存データがあれば編集モード
-  const existing = state.requests.find(r => r.staff_id === staffId && r.date === dates[0]);
+  // 開放月の範囲外を手入力で登録できないようにする
+  const dateRange = getRequestDateRange();
+  startInput.min = dateRange.min;
+  startInput.max = dateRange.max;
+  endInput.min = dateRange.min;
+  endInput.max = dateRange.max;
+
+  // 選択範囲内のいずれかの日に既存データがあれば編集モード（先頭日とは限らない）
+  // 新規登録（mode='create'）では既定スタッフの既存希望を読み込まない
+  const existing = mode === 'edit' ? findRequestInDates(state.requests, staffId, dates) : null;
   state.editingRequest = existing || null;
 
   if (existing) {
@@ -1101,10 +1141,16 @@ function openModal(staffId, dates) {
     const historyList = document.getElementById('modal-history-list');
     historyList.innerHTML = '';
     if (existing.created_at) {
-      historyList.innerHTML += `<li>${formatDateTime(existing.created_at)} に登録</li>`;
+      appendHistoryItem(historyList, `${formatDateTime(existing.created_at)} に登録`);
     }
-    if (existing.updated_at && existing.updated_at !== existing.created_at) {
-      historyList.innerHTML += `<li>${formatDateTime(existing.updated_at)} に更新</li>`;
+    const changeHistory = Array.isArray(existing.change_history) ? existing.change_history : [];
+    for (const entry of changeHistory) {
+      const changes = getRequestChanges(entry.before, entry.after, getStaffName);
+      appendHistoryItem(historyList, `${formatDateTime(entry.changed_at)} に更新：${changes.join('、')}`);
+    }
+    // 履歴カラム導入前の更新は内容を復元できないため、日時だけを表示する
+    if (changeHistory.length === 0 && existing.updated_at && existing.updated_at !== existing.created_at) {
+      appendHistoryItem(historyList, `${formatDateTime(existing.updated_at)} に更新（変更内容の記録なし）`);
     }
     document.getElementById('modal-history').style.display = 'block';
   } else {
@@ -1124,6 +1170,24 @@ function closeModal() {
   state.editingDates = [];
   state.editingStaffId = null;
   state.editingRequest = null;
+  state.editingMode = 'edit';
+}
+
+// change_history カラム未適用のDBで書き込みが失敗したかどうか
+function isMissingChangeHistoryColumn(error) {
+  return !!error && /change_history/.test(error.message || '');
+}
+
+// change_history を含む書き込みを実行し、カラム未適用なら履歴なしで1回だけ再実行する
+async function writeRequests(buildQuery, row) {
+  if (state.changeHistorySupported) {
+    const { error } = await buildQuery(row);
+    if (!isMissingChangeHistoryColumn(error)) return { error };
+    console.warn('change_history カラムが未適用のため、変更履歴なしで保存します');
+    state.changeHistorySupported = false;
+  }
+  const strip = r => { const { change_history, ...rest } = r; return rest; };
+  return buildQuery(Array.isArray(row) ? row.map(strip) : strip(row));
 }
 
 async function handleModalSave() {
@@ -1148,30 +1212,100 @@ async function handleModalSave() {
     return;
   }
 
-  const targetDates = [];
-  const currDt = new Date(startStr + 'T00:00:00');
-  const endDt = new Date(endStr + 'T00:00:00');
-  
-  while (currDt <= endDt) {
-    targetDates.push(formatDate(currDt));
-    currDt.setDate(currDt.getDate() + 1);
+  // 入力欄の min/max は手入力で回避できるため、保存時にも開放月の範囲を確認する
+  const dateRange = getRequestDateRange();
+  if (startStr < dateRange.min || endStr > dateRange.max) {
+    alert(`希望休を登録できるのは ${dateRange.min} 〜 ${dateRange.max} の範囲です`);
+    return;
   }
 
-  const upsertData = targetDates.map(d => ({
-    staff_id: staffId,
-    date: d,
-    request_type: type,
-    note: note || null
-  }));
+  const targetDates = enumerateDates(startStr, endStr);
+  const source = resolveEditingSource({
+    mode: state.editingMode,
+    editingStaffId: state.editingStaffId,
+    editingRequest: state.editingRequest,
+    editingDates: state.editingDates,
+    targetDates,
+    selectedStaffId: staffId,
+    requests: state.requests,
+  });
+  const originalRequests = source.originalRequests;
+  const before = source.request
+    ? createRequestSnapshot(
+      source.staffId,
+      // 選択範囲すべてではなく、実際に希望が入っている日付を「変更前」の期間とする
+      originalRequests.map(request => request.date),
+      source.request.request_type,
+      source.request.note,
+    )
+    : null;
+  const after = createRequestSnapshot(staffId, targetDates, type, note);
+  const changes = before ? getRequestChanges(before, after, getStaffName) : [];
 
-  const { error } = await supabase
-    .from('ringo_shift_requests')
-    .upsert(upsertData, { onConflict: 'staff_id, date' });
-
-  if (error) {
-    console.error('Error saving requests:', error);
-    alert('保存に失敗しました。');
+  // 変更前スナップショットは代表1件の区分・備考しか持たないため、対象期間に別区分が
+  // 混ざっている場合は「変更なし」と判定せず、上書き保存まで進める
+  if (before && changes.length === 0 && hasUniformRequests(originalRequests, type, note)) {
+    closeModal();
     return;
+  }
+
+  const changedAt = new Date().toISOString();
+  const historyEntry = before ? { changed_at: changedAt, before, after } : null;
+
+  const toUpdate = [];
+  const toInsert = [];
+  for (const d of targetDates) {
+    const existingReq = state.requests.find(r => r.staff_id === staffId && r.date === d);
+    if (existingReq) toUpdate.push(existingReq);
+    else toInsert.push(d);
+  }
+
+  // UPDATE（既存レコードがある日は上書き）
+  for (const req of toUpdate) {
+    const changeHistory = Array.isArray(req.change_history) ? req.change_history : [];
+    const { error } = await writeRequests(
+      row => supabase.from('ringo_shift_requests').update(row).eq('id', req.id),
+      {
+        request_type: type,
+        note: note || null,
+        change_history: historyEntry ? [...changeHistory, historyEntry] : changeHistory,
+        updated_at: changedAt,
+      },
+    );
+    // 途中で失敗したら再取得して、画面とDBのズレを残さない
+    if (error) { console.error(error); alert('更新に失敗しました: ' + error.message); await loadRequests(); return; }
+  }
+
+  // INSERT（無い日は新規追加）
+  if (toInsert.length > 0) {
+    const originalCreatedAt = originalRequests
+      .map(request => request.created_at)
+      .filter(Boolean)
+      .sort()[0];
+    const originalHistory = Array.isArray(source.request?.change_history)
+      ? source.request.change_history
+      : [];
+    const rows = toInsert.map(d => ({
+      staff_id: staffId,
+      date: d,
+      request_type: type,
+      note: note || null,
+      change_history: historyEntry ? [...originalHistory, historyEntry] : [],
+      created_at: originalCreatedAt || changedAt,
+      updated_at: changedAt,
+    }));
+    const { error } = await writeRequests(
+      r => supabase.from('ringo_shift_requests').insert(r),
+      rows,
+    );
+    if (error) { console.error(error); alert('登録に失敗しました: ' + error.message); await loadRequests(); return; }
+  }
+
+  // 元の期間から外れた日を削除する（例: 9/16〜17 を 9/16 に短縮した場合の 9/17、スタッフ変更時の元スタッフ分）
+  const removedIds = getRemovedRequestIds(source.removableRequests, staffId, targetDates);
+  if (removedIds.length > 0) {
+    const { error } = await supabase.from('ringo_shift_requests').delete().in('id', removedIds);
+    if (error) { console.error(error); alert('期間変更の保存に失敗しました: ' + error.message); await loadRequests(); return; }
   }
 
   closeModal();
@@ -1181,7 +1315,8 @@ async function handleModalSave() {
 async function handleModalDelete() {
   if (!state.editingRequest) return;
 
-  const staffId = document.getElementById('modal-staff-select').value;
+  // 削除対象は「開いた時点のスタッフ」に限定する（プルダウンを変えた後に別スタッフの希望を消さない）
+  const staffId = state.editingStaffId;
   const startStr = document.getElementById('modal-date-start').value;
   const endStr = document.getElementById('modal-date-end').value;
 
@@ -1207,7 +1342,8 @@ async function handleModalDelete() {
 
   if (error) {
     console.error('Error deleting requests:', error);
-    alert('削除に失敗しました。');
+    alert('削除に失敗しました: ' + error.message);
+    await loadRequests();
     return;
   }
 
@@ -1258,6 +1394,17 @@ function formatDate(dt) {
 function formatDateTime(isoStr) {
   const dt = new Date(isoStr);
   return `${dt.getMonth() + 1}/${dt.getDate()} ${String(dt.getHours()).padStart(2, '0')}:${String(dt.getMinutes()).padStart(2, '0')}`;
+}
+
+function getStaffName(staffId) {
+  return state.staffList.find(staff => staff.id === staffId)?.name || staffId;
+}
+
+// 変更履歴は備考などユーザー入力を含むため textContent で追加する
+function appendHistoryItem(list, text) {
+  const item = document.createElement('li');
+  item.textContent = text;
+  list.appendChild(item);
 }
 function escapeHtml(str) {
   const div = document.createElement('div');

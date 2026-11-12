@@ -1,0 +1,10 @@
+version: 2
+updates:
+  # npm は依存パッケージが無いため対象にしない（依存を足したら npm も追加する）
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions-minor-patch:
+        update-types: [minor, patch]

@@ -1833,7 +1833,7 @@ function openCellEditor(cell, staff, dateStr) {
         showToast('更新しました', 'success');
       } catch (err) {
         console.error(err);
-        showToast('更新に失敗', 'error');
+        showToast('更新に失敗: ' + (err?.message || ''), 'error');
       }
 
       editor.style.display = 'none';
