@@ -7,6 +7,7 @@
  */
 
 import { supabase } from './supabase-config.js';
+import { setupLogoutButton } from './auth.js';
 import {
   getDefaultGenerateMonth,
   getCalendarMonthClamped,
@@ -459,11 +460,9 @@ function bindEvents() {
     document.getElementById('other-reqs-accordion').classList.toggle('is-open');
   });
 
-  // ログアウト
-  document.getElementById('btn-logout')?.addEventListener('click', async () => {
-    await supabase.auth.signOut();
-    window.location.replace('login.html');
-  });
+  // ログアウト（共通処理: js/auth.js）
+
+  setupLogoutButton();
 
   // 他 PC での保存を取り込む（タブが前面に戻ったとき）
   document.addEventListener('visibilitychange', () => {
@@ -619,10 +618,30 @@ function setupGanttHover() {
     ganttTable.querySelectorAll('.cross-highlight').forEach(c => c.classList.remove('cross-highlight'));
   }
 
+  function clearOtherListHighlight() {
+    document.querySelectorAll('.other-list__item.is-gantt-hover').forEach(el => el.classList.remove('is-gantt-hover'));
+  }
+
+  // ガントのマスにホバーしたら、その日を含む条件付き希望カードを強調する（カード→ガントの逆方向）
+  function highlightMatchingOtherItems(staffId, dateStr) {
+    clearOtherListHighlight();
+    if (!staffId || !dateStr) return;
+    document.querySelectorAll('.other-list__item--clickable').forEach(item => {
+      if (item.dataset.staff !== staffId) return;
+      const start = item.dataset.start;
+      const end = item.dataset.end || item.dataset.start;
+      if (dateStr >= start && dateStr <= end) item.classList.add('is-gantt-hover');
+    });
+  }
+
   ganttTable.addEventListener('mouseover', (e) => {
     clearCrossHighlight();
     const cell = e.target.closest('td.day-cell');
-    if (!cell) return;
+    if (!cell) {
+      clearOtherListHighlight();
+      return;
+    }
+    highlightMatchingOtherItems(cell.dataset.staff, cell.dataset.date);
 
     // 行のハイライト
     const tr = cell.closest('tr');
@@ -641,6 +660,7 @@ function setupGanttHover() {
 
   ganttTable.addEventListener('mouseleave', () => {
     clearCrossHighlight();
+    clearOtherListHighlight();
   });
 }
 

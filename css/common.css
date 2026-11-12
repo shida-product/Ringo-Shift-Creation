@@ -956,13 +956,15 @@ select.input-field,
   transition: all var(--transition-fast);
   max-width: 100%;
 }
-.other-list__item:hover {
+.other-list__item:hover,
+.other-list__item.is-gantt-hover {
   transform: translateY(-2px);
   box-shadow: var(--shadow-md);
 }
 .other-list__item--clickable { cursor: pointer; }
 .other-list__item--clickable:active { transform: translateY(0); box-shadow: var(--shadow-sm); }
-.other-list__item--clickable:hover { background: var(--color-surface-hover); border-color: var(--color-primary-bg); }
+.other-list__item--clickable:hover,
+.other-list__item--clickable.is-gantt-hover { background: var(--color-surface-hover); border-color: var(--color-primary-bg); }
 .other-list__item--off      { border-left-color: var(--color-off); }
 .other-list__item--am       { border-left-color: var(--color-am); }
 .other-list__item--pm       { border-left-color: var(--color-pm); }
@@ -994,7 +996,8 @@ select.input-field,
   opacity: 0;
   transition: opacity var(--transition-fast);
 }
-.other-list__item--clickable:hover .other-list__edit-icon {
+.other-list__item--clickable:hover .other-list__edit-icon,
+.other-list__item--clickable.is-gantt-hover .other-list__edit-icon {
   opacity: 1;
 }
 

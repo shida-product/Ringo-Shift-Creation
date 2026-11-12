@@ -7,6 +7,7 @@
  */
 
 import { supabase } from './supabase-config.js';
+import { setupLogoutButton } from './auth.js';
 
 // ============================================================
 // ラベル定義
@@ -72,11 +73,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
-  // ログアウト
-  document.getElementById('btn-logout')?.addEventListener('click', async () => {
-    await supabase.auth.signOut();
-    window.location.replace('login.html');
-  });
+  // ログアウト（共通処理: js/auth.js）
+
+  setupLogoutButton();
 });
 
 // ============================================================

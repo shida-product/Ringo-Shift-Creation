@@ -7,8 +7,8 @@
   <meta name="description" content="りんごちゃん薬局 スタッフ希望休管理ツール">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/common.css?v=10">
-  <link rel="stylesheet" href="css/main.css?v=9">
+  <link rel="stylesheet" href="css/common.css?v=11">
+  <link rel="stylesheet" href="css/main.css?v=10">
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <script type="module">
@@ -138,12 +138,21 @@
     <div class="bottom-sheet" id="bottom-sheet">
       <div class="bottom-sheet__handle"></div>
       <div class="bottom-sheet__header">
-        <span class="bottom-sheet__title" id="bottom-sheet-title"></span>
+        <div class="bottom-sheet__heading">
+          <span class="bottom-sheet__title" id="bottom-sheet-title"></span>
+          <span class="bottom-sheet__count" id="bottom-sheet-count"></span>
+        </div>
         <button class="bottom-sheet__close" id="bottom-sheet-close" aria-label="閉じる">
           <i data-lucide="x" class="icon-md"></i>
         </button>
       </div>
       <div class="bottom-sheet__body" id="bottom-sheet-body"></div>
+      <!-- 新規登録は件数が多くてもスクロールせず押せるよう、本文の外に固定する -->
+      <div class="bottom-sheet__footer">
+        <button class="btn btn--primary bottom-sheet__add" id="bottom-sheet-add" type="button">
+          <i data-lucide="plus" class="icon-lg"></i> この日に新規登録
+        </button>
+      </div>
     </div>
   </div>
 
@@ -170,7 +179,7 @@
   <!-- トースト -->
   <div class="toast-container" id="toast-container"></div>
 
-  <script type="module" src="js/main.js?v=5"></script>
+  <script type="module" src="js/main.js?v=6"></script>
   <script>lucide.createIcons();</script>
 </body>
 </html>
