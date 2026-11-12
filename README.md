@@ -63,6 +63,7 @@ js/admin.js                 スタッフ管理・表示色設定
 js/month-window.js          選択できる月の範囲（1〜15日は+4ヶ月、16日以降は+5ヶ月）
 js/request-edit.js          希望休の保存・削除の判定（純粋関数）
 js/shift-snapshot.js        生成直後との差分・前月からの連勤キャリー（純粋関数）
+js/auth.js                  ログアウト処理（各ページ共通）
 js/supabase-config.js       環境別Supabase接続設定（機密値をコミットしない）
 sql/                        DB定義・RLSなど
 test/                       月窓・希望編集のテスト（npm test）

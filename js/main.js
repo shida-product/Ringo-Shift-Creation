@@ -8,6 +8,7 @@
  */
 
 import { supabase } from './supabase-config.js';
+import { setupLogoutButton } from './auth.js';
 import {
   getCalendarMonthClamped,
   getMonthWindow,
@@ -223,6 +224,12 @@ function bindEvents() {
 
   // ボトムシート
   document.getElementById('bottom-sheet-close').addEventListener('click', closeBottomSheet);
+  // 新規登録ボタン（本文の外に固定）→ 開いている日付で登録モーダル（選択中スタッフ or 先頭スタッフ）
+  document.getElementById('bottom-sheet-add').addEventListener('click', () => {
+    const dateStr = state.detailDate;
+    closeBottomSheet();
+    if (dateStr) openModal(state.selectedStaffId || state.staffList[0]?.id, [dateStr], 'create');
+  });
   document.getElementById('bottom-sheet-overlay').addEventListener('click', (e) => {
     if (e.target === e.currentTarget) closeBottomSheet();
   });
@@ -238,11 +245,9 @@ function bindEvents() {
   setupGanttDrag();
   setupGanttHover();
 
-  // ログアウト
-  document.getElementById('btn-logout')?.addEventListener('click', async () => {
-    await supabase.auth.signOut();
-    window.location.replace('login.html');
-  });
+  // ログアウト（共通処理: js/auth.js）
+
+  setupLogoutButton();
 }
 
 // ============================================================
@@ -381,12 +386,34 @@ function setupGanttHover() {
     ganttTable.querySelectorAll('.cross-highlight').forEach(c => c.classList.remove('cross-highlight'));
   }
 
+  function clearOtherListHighlight() {
+    document.querySelectorAll('.other-list__item.is-gantt-hover').forEach(el => el.classList.remove('is-gantt-hover'));
+  }
+
+  // ガントのマスにホバーしたら、その日を含む条件付き希望カードを強調する（カード→ガントの逆方向）
+  function highlightMatchingOtherItems(staffId, dateStr) {
+    clearOtherListHighlight();
+    if (!staffId || !dateStr) return;
+    document.querySelectorAll('.other-list__item--clickable').forEach(item => {
+      if (item.dataset.staffId !== staffId) return;
+      const start = item.dataset.date;
+      const end = item.dataset.endDate || item.dataset.date;
+      if (dateStr >= start && dateStr <= end) item.classList.add('is-gantt-hover');
+    });
+  }
+
   tbody.addEventListener('mouseover', (e) => {
     if (ganttTable.classList.contains('is-dragging')) return;
     clearCrossHighlight();
-    
+
     const cell = e.target.closest('td');
-    if (!cell) return;
+    if (!cell) {
+      clearOtherListHighlight();
+      return;
+    }
+
+    const dayCell = e.target.closest('.day-cell');
+    highlightMatchingOtherItems(dayCell?.dataset.staff, dayCell?.dataset.date);
 
     // 行のハイライト
     const tr = cell.closest('tr');
@@ -405,6 +432,7 @@ function setupGanttHover() {
 
   tbody.addEventListener('mouseleave', () => {
     clearCrossHighlight();
+    clearOtherListHighlight();
   });
 }
 
@@ -842,27 +870,36 @@ function showDayDetail(dateStr) {
   const selectedCell = document.querySelector(`.calendar-grid__cell[data-date="${dateStr}"]`);
   if (selectedCell) selectedCell.classList.add('is-selected');
 
-  // タイトル（祝日ラベル付き）
+  // タイトル（祝日ラベル付き）と件数
   const titleEl = document.getElementById('bottom-sheet-title');
   titleEl.textContent = title;
   if (holiday) {
     const badge = document.createElement('span');
+    badge.className = 'bottom-sheet__holiday';
     badge.textContent = ` ${holiday}`;
-    badge.style.cssText = 'font-size:var(--font-size-xs);color:var(--color-danger);font-weight:500;';
     titleEl.appendChild(badge);
   }
+  document.getElementById('bottom-sheet-count').textContent = `${dayReqs.length}件`;
+  state.detailDate = dateStr;
 
   // ボトムシートの中身
   let bodyHtml = '';
   if (dayReqs.length === 0) {
-    bodyHtml = '<p class="day-detail__empty">この日の希望はありません</p>';
+    bodyHtml = `<div class="day-detail__empty">
+      <i data-lucide="calendar-plus" class="day-detail__empty-icon"></i>
+      <p>この日の希望はありません</p>
+    </div>`;
   } else {
     bodyHtml = '<ul class="day-detail__list">';
     dayReqs.forEach(r => {
       let type, evtCls;
-      switch (r.request_type) {
-        case 'off':      type = '休み希望'; evtCls = 'cal-evt--off';      break;
-        default:         type = 'コメント'; evtCls = 'cal-evt--other';    break;
+      if (r.is_virtual) {
+        type = '固定休'; evtCls = 'cal-evt--off';
+      } else {
+        switch (r.request_type) {
+          case 'off':      type = '休み希望'; evtCls = 'cal-evt--off';      break;
+          default:         type = 'コメント'; evtCls = 'cal-evt--other';    break;
+        }
       }
       const note = r.note
         ? `<span class="day-detail__note">${escapeHtml(r.note)}</span>`
@@ -877,11 +914,6 @@ function showDayDetail(dateStr) {
     });
     bodyHtml += '</ul>';
   }
-
-  // 新規登録ボタン（常に表示、スタッフ未選択時はモーダル内で選択）
-  bodyHtml += `<button class="btn btn--primary btn--sm btn--block bottom-sheet__add" id="bottom-sheet-add">
-    <i data-lucide="plus" class="icon-xs"></i> 新規登録
-  </button>`;
 
   document.getElementById('bottom-sheet-body').innerHTML = bodyHtml;
   document.getElementById('bottom-sheet-overlay').classList.add('active');
@@ -903,12 +935,6 @@ function showDayDetail(dateStr) {
       openModal(staffId, groupDates);
     });
   });
-
-  // 新規登録ボタン → 登録モーダル（選択中スタッフ or 先頭スタッフ）
-  document.getElementById('bottom-sheet-add').addEventListener('click', () => {
-    closeBottomSheet();
-    openModal(state.selectedStaffId || state.staffList[0]?.id, [dateStr], 'create');
-  });
 }
 
 function closeBottomSheet() {
@@ -916,6 +942,7 @@ function closeBottomSheet() {
   if (!overlay) return;
   overlay.classList.remove('active');
   document.getElementById('bottom-sheet-title').textContent = '';
+  document.getElementById('bottom-sheet-count').textContent = '';
   document.getElementById('bottom-sheet-body').innerHTML = '';
   document.querySelectorAll('.calendar-grid__cell.is-selected').forEach(c => c.classList.remove('is-selected'));
 }
@@ -1029,7 +1056,7 @@ function renderOtherList() {
 
     const noteHtml = g.note ? `<span class="other-list__note">${escapeHtml(g.note)}</span>` : '';
 
-    html += `<div class="other-list__item other-list__item--clickable ${itemCls}" data-staff-id="${g.staff_id}" data-date="${g.start_date}" data-type="${g.request_type}">
+    html += `<div class="other-list__item other-list__item--clickable ${itemCls}" data-staff-id="${g.staff_id}" data-date="${g.start_date}" data-end-date="${g.end_date}" data-type="${g.request_type}">
       <span class="other-list__date">${dateLabel}</span>
       <span class="other-list__staff">${escapeHtml(lastName)} ${typeLabel}</span>
       ${noteHtml}

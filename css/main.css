@@ -428,7 +428,8 @@
   padding-bottom: max(env(safe-area-inset-bottom, 0px), 20px);
   transform: translateY(100%);
   transition: transform var(--transition-normal);
-  max-height: 72vh;
+  max-height: min(70vh, 640px);
+  max-height: min(70dvh, 640px);
   display: flex;
   flex-direction: column;
 }
@@ -447,17 +448,38 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 20px 12px;
+  min-height: 64px;
+  padding: 10px 20px 12px;
   border-bottom: 1px solid var(--color-border);
   flex-shrink: 0;
+}
+.bottom-sheet__heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
 }
 .bottom-sheet__title {
   font-size: var(--font-size-base);
   font-weight: 700;
 }
+.bottom-sheet__holiday {
+  font-size: var(--font-size-xs);
+  color: var(--color-danger);
+  font-weight: 500;
+}
+.bottom-sheet__count {
+  padding: 3px 8px;
+  border-radius: var(--radius-full);
+  background: var(--color-surface-2);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  white-space: nowrap;
+}
 .bottom-sheet__close {
-  width: 32px;
-  height: 32px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   background: var(--color-surface-2);
   color: var(--color-text-secondary);
@@ -471,9 +493,23 @@
   background: var(--color-surface-hover);
 }
 .bottom-sheet__body {
-  padding: 16px 20px 4px;
+  padding: 14px 20px;
   overflow-y: auto;
   flex: 1;
+  min-height: 0;
+  overscroll-behavior: contain;
+}
+.bottom-sheet__footer {
+  flex-shrink: 0;
+  padding: 10px 20px 0;
+  border-top: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+.bottom-sheet__footer .bottom-sheet__add {
+  width: 100%;
+  min-height: 52px;
+  margin-top: 0;
+  font-size: var(--font-size-sm);
 }
 
 /* FABボタン（スマホ用フローティングアクション） */
@@ -503,28 +539,29 @@
 /* ---------- 日付詳細リスト（ボトムシート内） ---------- */
 .day-detail__list {
   list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .day-detail__item {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 8px;
-  border-bottom: 1px solid var(--color-border);
+  min-height: 64px;
+  padding: 12px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-2);
   font-size: var(--font-size-sm);
   flex-wrap: wrap;
   border-radius: var(--radius-sm);
-}
-.day-detail__item:last-child {
-  border-bottom: none;
 }
 
 /* タップ可能なイベント行 */
 .day-detail__item--tappable {
   cursor: pointer;
   transition: background var(--transition-fast);
-  margin: 0 -8px;
-  padding: 10px 8px;
+  padding: 12px;
 }
 .day-detail__item--tappable:hover,
 .day-detail__item--tappable:active {
@@ -534,6 +571,7 @@
 .day-detail__name {
   font-weight: 600;
   flex: 1;
+  min-width: 7em;
 }
 
 .day-detail__chevron {
@@ -549,7 +587,26 @@
   display: block;
   width: 100%;
   padding-left: 2px;
-  margin-top: -4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bottom-sheet__body .day-detail__empty {
+  min-height: 92px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+.day-detail__empty-icon {
+  width: 24px;
+  height: 24px;
+  opacity: 0.7;
 }
 
 /* ================================================================
