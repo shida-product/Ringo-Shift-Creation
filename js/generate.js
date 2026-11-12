@@ -7,6 +7,12 @@
  */
 
 import { supabase } from './supabase-config.js';
+import {
+  getDefaultGenerateMonth,
+  getCalendarMonthClamped,
+  getMonthWindow,
+  isMonthInWindow,
+} from './month-window.js';
 
 // ============================================================
 // 定数
@@ -207,12 +213,15 @@ function getHolidays(year) {
 // ============================================================
 // 状態管理
 // ============================================================
+// 初期表示は常に翌月（月窓内にクランプ）
+const _initView = getDefaultGenerateMonth();
+
 const state = {
   staffList: [],
   requests: [],       // ringo_shift_requests（希望休）
   assignments: [],     // ringo_shift_assignments（生成結果）
-  currentYear: new Date().getFullYear(),
-  currentMonth: new Date().getMonth(),
+  currentYear: _initView.year,
+  currentMonth: _initView.month,
   holidays: {},
   warnings: [],
   hasGenerated: false,
@@ -279,7 +288,12 @@ async function restoreFromHistory(index) {
   state.historyIndex = index;
   state.assignments = cloneAssignments(state.history[index]);
   const yearMonth = getCurrentYearMonth();
-  await saveAssignments(yearMonth, state.assignments);
+  try {
+    await saveAssignments(yearMonth, state.assignments);
+  } catch (err) {
+    console.error(err);
+    showToast(err.message, 'error');
+  }
   renderGantt();
   renderConditionsCheck();
   updateUndoRedoButtons();
@@ -300,7 +314,12 @@ async function handleReset() {
   // 履歴をクリアして初期状態に戻す
   state.history = [cloneAssignments(state.assignments)];
   state.historyIndex = 0;
-  await saveAssignments(getCurrentYearMonth(), state.assignments);
+  try {
+    await saveAssignments(getCurrentYearMonth(), state.assignments);
+  } catch (err) {
+    console.error(err);
+    showToast(err.message, 'error');
+  }
   renderGantt();
   renderConditionsCheck();
   updateUndoRedoButtons();
@@ -328,12 +347,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
-  if (state.currentYear < 2026 || (state.currentYear === 2026 && state.currentMonth < 4)) {
-    state.currentYear = 2026; state.currentMonth = 4;
-  }
-  if (state.currentYear > 2026 || (state.currentYear === 2026 && state.currentMonth > 11)) {
-    state.currentYear = 2026; state.currentMonth = 11;
-  }
   bindEvents();
   state.holidays = { ...getHolidays(state.currentYear), ...getHolidays(state.currentYear + 1) };
   renderMonth();
@@ -346,13 +359,9 @@ function bindEvents() {
   document.getElementById('prev-month').addEventListener('click', () => changeMonth(-1));
   document.getElementById('next-month').addEventListener('click', () => changeMonth(1));
   document.getElementById('today-month-btn').addEventListener('click', () => {
-    const now = new Date();
-    let y = now.getFullYear();
-    let m = now.getMonth();
-    if (y < 2026 || (y === 2026 && m < 4)) { y = 2026; m = 4; }
-    if (y > 2026 || (y === 2026 && m > 11)) { y = 2026; m = 11; }
-    state.currentYear = y;
-    state.currentMonth = m;
+    const cal = getCalendarMonthClamped();
+    state.currentYear = cal.year;
+    state.currentMonth = cal.month;
     state.holidays = { ...getHolidays(state.currentYear), ...getHolidays(state.currentYear + 1) };
     renderMonth();
     loadExistingAssignments();
@@ -363,13 +372,13 @@ function bindEvents() {
     if (e.target === e.currentTarget) closeMonthPicker();
   });
   document.getElementById('picker-prev-year').addEventListener('click', () => { 
-    if (pickerYear <= 2026) return;
-    pickerYear--; 
+    if (pickerYear <= getMonthWindow().min.year) return;
+    pickerYear--;
     renderMonthPickerGrid(); 
   });
   document.getElementById('picker-next-year').addEventListener('click', () => { 
-    if (pickerYear >= 2026) return;
-    pickerYear++; 
+    if (pickerYear >= getMonthWindow().max.year) return;
+    pickerYear++;
     renderMonthPickerGrid(); 
   });
   document.getElementById('btn-generate').addEventListener('click', handleGenerate);
@@ -417,7 +426,7 @@ function renderMonthPickerGrid() {
   const grid = document.getElementById('picker-month-grid');
   grid.innerHTML = MONTH_LABELS.map((label, i) => {
     const isCurrent = (pickerYear === state.currentYear && i === state.currentMonth);
-    const isDisabled = (pickerYear < 2026 || pickerYear > 2026 || (pickerYear === 2026 && i < 4));
+    const isDisabled = !isMonthInWindow(pickerYear, i);
     const attr = isDisabled ? ' disabled' : '';
     return `<button class="month-picker__month-btn${isCurrent ? ' is-current' : ''}" data-month="${i}"${attr}>${label}</button>`;
   }).join('');
@@ -475,8 +484,7 @@ function changeMonth(delta) {
   if (nextMonth > 11) { nextMonth = 0; nextYear++; }
   else if (nextMonth < 0) { nextMonth = 11; nextYear--; }
   
-  if (nextYear < 2026 || (nextYear === 2026 && nextMonth < 4)) return;
-  if (nextYear > 2026 || (nextYear === 2026 && nextMonth > 11)) return;
+  if (!isMonthInWindow(nextYear, nextMonth)) return;
 
   state.currentYear = nextYear;
   state.currentMonth = nextMonth;
@@ -616,9 +624,12 @@ async function loadData() {
 }
 
 async function loadRequests(yearMonth) {
-  const [year, month] = yearMonth.split('-');
-  const startDateStr = `${year}-${month}-01`;
-  const endDateStr = new Date(year, parseInt(month), 0).toISOString().split('T')[0];
+  const [year, month] = yearMonth.split('-').map(Number);
+  const mm = String(month).padStart(2, '0');
+  const startDateStr = `${year}-${mm}-01`;
+  // toISOString() は UTC 変換で JST の月末日が前日にずれるため、ローカル日付で組み立てる
+  const lastDay = new Date(year, month, 0).getDate();
+  const endDateStr = `${year}-${mm}-${String(lastDay).padStart(2, '0')}`;
 
   const { data, error } = await supabase
     .from('ringo_shift_requests')
@@ -626,13 +637,17 @@ async function loadRequests(yearMonth) {
     .gte('date', startDateStr)
     .lte('date', endDateStr);
 
+  // 取得失敗を「0件」と取り違えると希望休を無視したシフトになるため、null を返して区別する
   if (error) {
     console.error('Error loading requests:', error);
-    return [];
+    return null;
   }
-  
-  const dbRequests = data || [];
-  return buildEffectiveRequests(year, parseInt(month), dbRequests);
+
+  // 無効化したスタッフの希望はガントに行がなく、一覧で「不明」表示になるため在籍スタッフ分だけ扱う
+  const rows = data || [];
+  const activeIds = new Set(state.staffList.map(s => s.id));
+  const dbRequests = state.staffList.length > 0 ? rows.filter(r => activeIds.has(r.staff_id)) : rows;
+  return buildEffectiveRequests(year, month, dbRequests);
 }
 
 function buildEffectiveRequests(year, month, dbRequests) {
@@ -679,7 +694,11 @@ async function loadExistingAssignments() {
   const yearMonth = getCurrentYearMonth();
 
   // 描画のための希望休データを先にロード
-  state.requests = await loadRequests(yearMonth);
+  const requests = await loadRequests(yearMonth);
+  if (requests === null) {
+    showToast('希望休の取得に失敗しました。再読み込みしてください', 'error');
+  }
+  state.requests = requests || [];
 
   const { data, error } = await supabase
     .from('ringo_shift_assignments')
@@ -743,7 +762,13 @@ async function handleGenerate() {
 
   try {
     const yearMonth = getCurrentYearMonth();
-    state.requests = await loadRequests(yearMonth);
+    if (state.staffList.length === 0) {
+      throw new Error('スタッフ情報を取得できませんでした。再読み込みしてから再度お試しください');
+    }
+    // 希望休が取得できないまま生成すると、希望休を無視したシフトができてしまう
+    const requests = await loadRequests(yearMonth);
+    if (requests === null) throw new Error('希望休を取得できませんでした。通信状況を確認して再度お試しください');
+    state.requests = requests;
 
     // スコアリング生成：複数回試行して最高スコアを採用
     const TRIAL_COUNT = 30;
@@ -1440,6 +1465,8 @@ function generateShifts(yearMonth, manualOverrides, manualSet, randomize = false
 // ============================================================
 // DB保存
 // ============================================================
+// supabase-js はDBエラーで throw せず { error } を返すため、ここで throw して呼び出し元に失敗を伝える
+// （以前は false を返すだけで誰も見ておらず、保存失敗でも「生成完了」に見えていた）
 async function saveAssignments(yearMonth, assignments) {
   const { error: delError } = await supabase
     .from('ringo_shift_assignments')
@@ -1448,7 +1475,7 @@ async function saveAssignments(yearMonth, assignments) {
 
   if (delError) {
     console.error('Error deleting old assignments:', delError);
-    return false;
+    throw new Error(`既存シフトの削除に失敗しました（${delError.message}）`);
   }
 
   if (assignments.length === 0) return true;
@@ -1468,9 +1495,9 @@ async function saveAssignments(yearMonth, assignments) {
 
   if (insError) {
     console.error('Error saving assignments:', insError);
-    return false;
+    throw new Error(`シフトの保存に失敗しました（${insError.message}）`);
   }
-  
+
   return true;
 }
 

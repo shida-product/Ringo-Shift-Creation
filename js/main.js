@@ -8,6 +8,12 @@
  */
 
 import { supabase } from './supabase-config.js';
+import {
+  getCalendarMonthClamped,
+  getMonthWindow,
+  isMonthInWindow,
+  clampToMonthWindow,
+} from './month-window.js';
 
 // ============================================================
 // スタッフカラーパレット（個人別色分け・カレンダー表示用）
@@ -145,12 +151,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
-  if (state.currentYear < 2026 || (state.currentYear === 2026 && state.currentMonth < 4)) {
-    state.currentYear = 2026; state.currentMonth = 4;
-  }
-  if (state.currentYear > 2026 || (state.currentYear === 2026 && state.currentMonth > 11)) {
-    state.currentYear = 2026; state.currentMonth = 11;
-  }
+  const initView = clampToMonthWindow(state.currentYear, state.currentMonth);
+  state.currentYear = initView.year;
+  state.currentMonth = initView.month;
   bindEvents();
   await loadStaffList();
   updateHolidays();
@@ -173,13 +176,9 @@ function bindEvents() {
   document.getElementById('prev-month').addEventListener('click', () => changeMonth(-1));
   document.getElementById('next-month').addEventListener('click', () => changeMonth(1));
   document.getElementById('today-month-btn').addEventListener('click', () => {
-    const now = new Date();
-    let y = now.getFullYear();
-    let m = now.getMonth();
-    if (y < 2026 || (y === 2026 && m < 4)) { y = 2026; m = 4; }
-    if (y > 2026 || (y === 2026 && m > 11)) { y = 2026; m = 11; }
-    state.currentYear = y;
-    state.currentMonth = m;
+    const cal = getCalendarMonthClamped();
+    state.currentYear = cal.year;
+    state.currentMonth = cal.month;
     updateHolidays();
     renderMonth();
     loadRequests();
@@ -192,12 +191,12 @@ function bindEvents() {
     if (e.target === e.currentTarget) closeMonthPicker();
   });
   document.getElementById('picker-prev-year').addEventListener('click', () => {
-    if (pickerYear <= 2026) return;
+    if (pickerYear <= getMonthWindow().min.year) return;
     pickerYear--;
     renderMonthPickerGrid();
   });
   document.getElementById('picker-next-year').addEventListener('click', () => {
-    if (pickerYear >= 2026) return;
+    if (pickerYear >= getMonthWindow().max.year) return;
     pickerYear++;
     renderMonthPickerGrid();
   });
@@ -255,7 +254,7 @@ function renderMonthPickerGrid() {
   const grid = document.getElementById('picker-month-grid');
   grid.innerHTML = MONTH_LABELS.map((label, i) => {
     const isCurrent = (pickerYear === state.currentYear && i === state.currentMonth);
-    const isDisabled = (pickerYear < 2026 || pickerYear > 2026 || (pickerYear === 2026 && i < 4));
+    const isDisabled = !isMonthInWindow(pickerYear, i);
     const attr = isDisabled ? ' disabled' : '';
     return `<button class="month-picker__month-btn${isCurrent ? ' is-current' : ''}" data-month="${i}"${attr}>${label}</button>`;
   }).join('');
@@ -428,9 +427,13 @@ async function loadRequests() {
     console.error('Error loading requests:', error);
     state.requests = [];
   } else {
-    state.requests = data || [];
+    // 無効化（退職等）したスタッフの希望はガントに行がなく、カレンダーでは名前不明の「?」になるため、
+    // 在籍スタッフ分だけ扱う（DB上のデータは削除しない）
+    const rows = data || [];
+    const activeIds = new Set(state.staffList.map(s => s.id));
+    state.requests = state.staffList.length > 0 ? rows.filter(r => activeIds.has(r.staff_id)) : rows;
   }
-  
+
   buildEffectiveRequests();
   renderGantt();
   renderCalendar();
@@ -492,8 +495,7 @@ function changeMonth(delta) {
   if (nextMonth > 11) { nextMonth = 0; nextYear++; }
   else if (nextMonth < 0) { nextMonth = 11; nextYear--; }
   
-  if (nextYear < 2026 || (nextYear === 2026 && nextMonth < 4)) return;
-  if (nextYear > 2026 || (nextYear === 2026 && nextMonth > 11)) return;
+  if (!isMonthInWindow(nextYear, nextMonth)) return;
 
   state.currentYear = nextYear;
   state.currentMonth = nextMonth;
