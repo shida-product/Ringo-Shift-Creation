@@ -35,6 +35,7 @@ CREATE TABLE ringo_shift_requests (
   date DATE NOT NULL,
   request_type TEXT NOT NULL CHECK (request_type IN ('off', 'am', 'pm', 'other', 'dispense', 'ringo')),
   note TEXT,
+  change_history JSONB NOT NULL DEFAULT '[]'::jsonb,  -- 更新前後（期間・区分・備考・スタッフ）の履歴
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE(staff_id, date)

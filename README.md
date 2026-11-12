@@ -17,7 +17,7 @@
 | 画面 | 主な機能 |
 | --- | --- |
 | `login.html` | Supabase Authのメール・パスワードログイン |
-| `index.html` / `js/main.js` | PCのガント／スマホのカレンダーによる希望入力、固定休の表示 |
+| `index.html` / `js/main.js` | PCのガント／スマホのカレンダーによる希望入力、固定休の表示、希望の変更履歴（`change_history`） |
 | `generate.html` / `js/generate.js` | 30パターンのシフト生成、条件チェック、ガント表示、手動編集、Undo/Redo/Reset、CSV出力 |
 | `admin.html` / `js/admin.js` | スタッフ一覧、有効・無効設定、カラー設定等 |
 
@@ -57,8 +57,12 @@ admin.html                  スタッフ管理
 js/main.js                  希望入力のUI・データ処理
 js/generate.js              生成・チェック・CSV出力
 js/admin.js                 スタッフ管理・表示色設定
+js/month-window.js          選択できる月の範囲（1〜15日は+4ヶ月、16日以降は+5ヶ月）
+js/request-edit.js          希望休の保存・削除の判定（純粋関数）
 js/supabase-config.js       環境別Supabase接続設定（機密値をコミットしない）
 sql/                        DB定義・RLSなど
+test/                       月窓・希望編集のテスト（npm test）
+.github/workflows/          CI（npm test）・Supabase自動停止防止（keepalive）
 docs/ringo-requirements.md  現行要件の正本
 docs/shift-generation-requirements.md  補助的な制約チェック資料（旧条件の残存に注意）
 docs/money-forward-csv-notes.md        CSV取込時の注意
@@ -70,6 +74,9 @@ AGENTS.md / CLAUDE.md       開発・運用ルール
 
 - ローカル検証にはテスト用のSupabase環境を使用し、本番DBやスタッフの希望情報を勝手に操作しないでください
 - **本番のRLS（2026-10-24 にユーザーが SQL Editor で適用・確認）**: `ringo_staff` / `ringo_shift_requests` / `ringo_shift_assignments` に残るポリシーは `Allow access to Ringo user on <table>`（authenticated かつ email = `ringo@shift.com`）だけです。public 全許可・authenticated 全許可のポリシーは削除し、anon の権限は revoke 済み（未ログインは permission denied）。新規サインアップは無効です。現行定義は `sql/02_enable_rls.sql`
+- テストは `npm test`（Node 24、`.node-version`）。PR と `main` への push で GitHub Actions が実行する
+- Supabase の無料プランは無通信が続くと一時停止するため、`.github/workflows/supabase-keepalive.yml` が週2回 Auth の health に ping する。リポジトリの Secrets に `SUPABASE_URL` / `SUPABASE_ANON_KEY` の登録が必要
+- 希望休の変更履歴は `sql/add_shift_request_change_history.sql`（`change_history` カラム追加）の適用が前提。未適用でも画面は履歴なしで動く
 - `sql/enable_rls.sql` は廃止した旧定義（全許可）の置き場で、本文は削除済みです。git 履歴から旧SQLを再適用しないでください
 - `docs/shift-generation-requirements.md` には旧スタッフ体制の記述が残っています。条件変更時は `docs/ringo-requirements.md` と現行コード・DB設定を照合してください
 - `js/admin.js` の表示色設定にはブラウザの `localStorage` を用いる部分があります。すべての管理設定がDB同期されると推測しないでください
