@@ -237,9 +237,55 @@
   z-index: 1;
 }
 
-/* クロスハイライト（縦横軸）※集計欄・スタッフ名は除外 */
-.gantt-table td.cross-highlight:not(.gantt-summary-col):not(.staff-name),
-.gantt-table th.cross-highlight:not(.gantt-summary-col):not(.staff-name) {
+/* 前月末の連勤キャリー列 */
+.gantt-prev-carry {
+  min-width: 58px;
+  max-width: 72px;
+  padding: 2px 4px !important;
+  text-align: center;
+  vertical-align: middle;
+  background: var(--color-surface-2);
+  border-right: 2px solid var(--color-border) !important;
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: var(--color-text-muted);
+}
+.gantt-table thead .gantt-prev-carry {
+  line-height: 1.15;
+  white-space: nowrap;
+}
+.gantt-prev-carry .prev-carry-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.gantt-prev-carry .pattern-marker {
+  width: 28px;
+  height: 18px;
+  font-size: 0.55rem;
+}
+.gantt-prev-carry .prev-carry-streak {
+  color: var(--color-text-secondary);
+  font-size: 0.58rem;
+  white-space: nowrap;
+  line-height: 1.1;
+}
+.gantt-prev-carry.is-at-max {
+  background: var(--color-danger-bg);
+}
+.gantt-prev-carry.is-at-max .prev-carry-streak {
+  color: var(--color-danger);
+}
+.gantt-prev-carry .prev-carry-off,
+.gantt-prev-carry .prev-carry-empty {
+  font-size: 0.7rem;
+  color: var(--color-text-muted);
+}
+
+/* クロスハイライト（縦横軸）※集計欄・前月末列・スタッフ名は除外 */
+.gantt-table td.cross-highlight:not(.gantt-summary-col):not(.gantt-prev-carry):not(.staff-name),
+.gantt-table th.cross-highlight:not(.gantt-summary-col):not(.gantt-prev-carry):not(.staff-name) {
   background-color: #F1F5F9 !important;
 }
 
@@ -359,6 +405,42 @@
 .mini-pattern-marker--empty {
   background: transparent;
   border: 1px solid var(--color-border);
+}
+
+/* 生成直後から変わったマス */
+.day-cell.is-from-generated {
+  box-shadow: inset 0 0 0 1.5px var(--color-danger);
+}
+
+/* 生成からの差分パネル */
+.diff-panel__meta {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  font-weight: 500;
+}
+.diff-panel__csv {
+  margin-left: auto;
+}
+.diff-panel__empty {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+.diff-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-sm);
+}
+.diff-table th,
+.diff-table td {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--color-border);
+}
+.diff-table th {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  font-weight: 700;
 }
 
 /* 手動変更マーク */

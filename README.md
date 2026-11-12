@@ -29,6 +29,9 @@
 - 最初の1試行を基準生成とし、以後を変動試行として、30試行中の最高スコアを採用
 - `runAllChecks()` を採点と条件チェック表示で共用
 - 生成結果をSupabase DBへ保存。手動変更・Undo/Redo/Resetに対応
+- 生成直後の状態を `ringo_shift_generated_assignments` に保存し、どのPCからでもリセットできる。手で直したマスは「生成からの差分」パネルと差分CSVで確認できる
+- 前月末からの連勤を引き継いで生成・連勤チェックする（ガントに「前月末」列を表示）
+- タブに戻ったとき、他のPCで変わったシフト・希望休を読み込み直す
 - 制約条件が相互に衝突する場合、**すべての勤務条件を必ず満たせると保証するものではありません**。生成後に条件チェックを確認してください
 - 管理対象スタッフと勤務ルールの現行詳細は `docs/ringo-requirements.md` を参照
 
@@ -59,6 +62,7 @@ js/generate.js              生成・チェック・CSV出力
 js/admin.js                 スタッフ管理・表示色設定
 js/month-window.js          選択できる月の範囲（1〜15日は+4ヶ月、16日以降は+5ヶ月）
 js/request-edit.js          希望休の保存・削除の判定（純粋関数）
+js/shift-snapshot.js        生成直後との差分・前月からの連勤キャリー（純粋関数）
 js/supabase-config.js       環境別Supabase接続設定（機密値をコミットしない）
 sql/                        DB定義・RLSなど
 test/                       月窓・希望編集のテスト（npm test）
@@ -76,6 +80,7 @@ AGENTS.md / CLAUDE.md       開発・運用ルール
 - **本番のRLS（2026-10-24 にユーザーが SQL Editor で適用・確認）**: `ringo_staff` / `ringo_shift_requests` / `ringo_shift_assignments` に残るポリシーは `Allow access to Ringo user on <table>`（authenticated かつ email = `ringo@shift.com`）だけです。public 全許可・authenticated 全許可のポリシーは削除し、anon の権限は revoke 済み（未ログインは permission denied）。新規サインアップは無効です。現行定義は `sql/02_enable_rls.sql`
 - テストは `npm test`（Node 24、`.node-version`）。PR と `main` への push で GitHub Actions が実行する
 - Supabase の無料プランは無通信が続くと一時停止するため、`.github/workflows/supabase-keepalive.yml` が週2回 Auth の health に ping する。リポジトリの Secrets に `SUPABASE_URL` / `SUPABASE_ANON_KEY` の登録が必要
+- 生成直後の記録（リセット先・差分）は `sql/add_generated_assignments.sql`（`ringo_shift_generated_assignments` 作成・RLS）の適用が前提。未適用でも画面は「記録なし」として動く
 - 希望休の変更履歴は `sql/add_shift_request_change_history.sql`（`change_history` カラム追加）の適用が前提。未適用でも画面は履歴なしで動く
 - `sql/enable_rls.sql` は廃止した旧定義（全許可）の置き場で、本文は削除済みです。git 履歴から旧SQLを再適用しないでください
 - `docs/shift-generation-requirements.md` には旧スタッフ体制の記述が残っています。条件変更時は `docs/ringo-requirements.md` と現行コード・DB設定を照合してください

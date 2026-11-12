@@ -42,3 +42,7 @@ WITH CHECK ( auth.jwt() ->> 'email' = 'ringo@shift.com' );
 REVOKE ALL ON ringo_staff FROM anon;
 REVOKE ALL ON ringo_shift_requests FROM anon;
 REVOKE ALL ON ringo_shift_assignments FROM anon;
+
+-- 4. 生成直後スナップショット ringo_shift_generated_assignments（2026-11 追加）
+--    テーブル作成・RLS・ポリシー・anon revoke は sql/add_generated_assignments.sql でまとめて適用する。
+--    ポリシー名: "Allow access to Ringo user on ringo_shift_generated_assignments"（ringo@shift.com のみ）
