@@ -13,6 +13,21 @@ import {
   getMonthWindow,
   isMonthInWindow,
 } from './month-window.js';
+import {
+  getPrevYearMonth,
+  assignmentsContentEqual,
+  requestsContentEqual,
+  isGeneratedSnapshotNewer,
+  assignmentCellsEqual,
+  collectGeneratedDiffs,
+  buildDiffCsv,
+  computePrevCarryover,
+  maxConsecutiveWithCarry,
+  consecValueText,
+} from './shift-snapshot.js';
+
+// 生成直後スナップショットのテーブル（sql/add_generated_assignments.sql）
+const GENERATED_TABLE = 'ringo_shift_generated_assignments';
 
 // ============================================================
 // 定数
@@ -219,7 +234,11 @@ const _initView = getDefaultGenerateMonth();
 const state = {
   staffList: [],
   requests: [],       // ringo_shift_requests（希望休）
-  assignments: [],     // ringo_shift_assignments（生成結果）
+  assignments: [],     // ringo_shift_assignments（現行＝手直し後）
+  generatedAssignments: [], // 最後の生成直後（DBスナップショット。リセット先・差分の基準）
+  prevAssignments: [], // 前月の ringo_shift_assignments（月跨ぎ連勤用）
+  // 生成直後テーブルが未作成のDBでは読み書きをスキップする（SQL適用前でも画面を壊さない）
+  generatedTableAvailable: true,
   currentYear: _initView.year,
   currentMonth: _initView.month,
   holidays: {},
@@ -256,6 +275,30 @@ function loadHistoryFromLocal(yearMonth) {
 // ディープコピー（assignments配列用）
 function cloneAssignments(assignments) {
   return assignments.map(a => ({ ...a }));
+}
+
+// 生成直後スナップショットを、保存用のシフト行（手動フラグなし）に変換する
+function generatedToAssignments(generated) {
+  return generated.map(a => ({
+    year_month: a.year_month,
+    staff_id: a.staff_id,
+    date: a.date,
+    attendance_type: a.attendance_type,
+    work_pattern: a.work_pattern || '',
+    is_manual_override: false,
+  }));
+}
+
+/** Undo 用履歴を DB の現行に合わせて初期化（生成直後があれば Reset 先にする） */
+function initHistoryFromDb(assignments) {
+  const current = cloneAssignments(assignments);
+  state.baselineAssignments = state.generatedAssignments.length > 0
+    ? generatedToAssignments(state.generatedAssignments)
+    : cloneAssignments(current);
+  state.history = [current];
+  state.historyIndex = 0;
+  saveHistoryToLocal();
+  updateUndoRedoButtons();
 }
 
 // 履歴にpush（手動変更時に呼ぶ）
@@ -296,6 +339,7 @@ async function restoreFromHistory(index) {
   }
   renderGantt();
   renderConditionsCheck();
+  renderDiffPanel();
   updateUndoRedoButtons();
   saveHistoryToLocal();
 }
@@ -310,7 +354,12 @@ function handleRedo() {
 
 async function handleReset() {
   if (!state.baselineAssignments) return;
-  state.assignments = cloneAssignments(state.baselineAssignments);
+  if (!confirm('生成直後の状態に戻します。手で直したマスはすべて元に戻ります。よろしいですか？')) return;
+  // 生成直後相当へ戻し、手動フラグも必ず落とす（再生成・リセット時の手動フラグクリア規則）
+  state.assignments = cloneAssignments(state.baselineAssignments).map(a => ({
+    ...a,
+    is_manual_override: false,
+  }));
   // 履歴をクリアして初期状態に戻す
   state.history = [cloneAssignments(state.assignments)];
   state.historyIndex = 0;
@@ -322,6 +371,7 @@ async function handleReset() {
   }
   renderGantt();
   renderConditionsCheck();
+  renderDiffPanel();
   updateUndoRedoButtons();
   saveHistoryToLocal();
 }
@@ -332,7 +382,15 @@ function updateUndoRedoButtons() {
   const resetBtn = document.getElementById('btn-reset');
   if (undoBtn) undoBtn.disabled = state.historyIndex <= 0;
   if (redoBtn) redoBtn.disabled = state.historyIndex >= state.history.length - 1;
-  if (resetBtn) resetBtn.disabled = !state.baselineAssignments || state.historyIndex <= 0;
+  // 別PCで開いた直後は Undo 履歴が無くても、生成直後と内容が違えばリセットできるようにする
+  if (resetBtn) {
+    const differsFromBaseline = !!state.baselineAssignments
+      && state.baselineAssignments.some(b => {
+        const cur = state.assignments.find(a => a.staff_id === b.staff_id && a.date === b.date);
+        return !assignmentCellsEqual(cur, b);
+      });
+    resetBtn.disabled = !differsFromBaseline;
+  }
 }
 
 // ============================================================
@@ -383,6 +441,7 @@ function bindEvents() {
   });
   document.getElementById('btn-generate').addEventListener('click', handleGenerate);
   document.getElementById('btn-csv').addEventListener('click', handleCSVExport);
+  document.getElementById('btn-diff-csv')?.addEventListener('click', handleDiffCsvExport);
   document.getElementById('btn-undo').addEventListener('click', handleUndo);
   document.getElementById('btn-redo').addEventListener('click', handleRedo);
   document.getElementById('btn-reset').addEventListener('click', handleReset);
@@ -405,6 +464,113 @@ function bindEvents() {
     await supabase.auth.signOut();
     window.location.replace('login.html');
   });
+
+  // 他 PC での保存を取り込む（タブが前面に戻ったとき）
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') syncAssignmentsFromDbIfChanged();
+  });
+  window.addEventListener('focus', () => syncAssignmentsFromDbIfChanged());
+}
+
+let _syncAssignmentsInFlight = false;
+let _generatingInFlight = false;
+
+// 生成直後テーブルが未作成（SQL未適用）かどうか
+function isMissingGeneratedTable(error) {
+  if (!error) return false;
+  return error.code === '42P01' || error.code === 'PGRST205'
+    || (error.message || '').includes(GENERATED_TABLE);
+}
+
+// 生成直後スナップショットを取得する（未作成・失敗時は空配列）
+async function fetchGeneratedAssignments(yearMonth) {
+  if (!state.generatedTableAvailable) return [];
+  const { data, error } = await supabase.from(GENERATED_TABLE).select('*').eq('year_month', yearMonth);
+  if (error) {
+    if (isMissingGeneratedTable(error)) {
+      console.warn(`${GENERATED_TABLE} が未作成のため、生成直後の記録は使いません（sql/add_generated_assignments.sql を適用してください）`);
+      state.generatedTableAvailable = false;
+    } else {
+      console.error('Error loading generated assignments:', error);
+    }
+    return null;
+  }
+  return data || [];
+}
+
+async function syncAssignmentsFromDbIfChanged() {
+  if (_syncAssignmentsInFlight || _generatingInFlight) return;
+  const editor = document.getElementById('cell-editor');
+  if (editor && editor.style.display !== 'none') return; // 編集中は上書きしない
+
+  _syncAssignmentsInFlight = true;
+  try {
+    const yearMonth = getCurrentYearMonth();
+
+    // 希望休は他端末（希望休ページ）で追加・変更されうる
+    const remoteRequests = await loadRequests(yearMonth);
+    // 取得失敗（null）のときは古くても既存データを保持する（消えたように見せない）
+    const requestsChanged = remoteRequests !== null
+      && !requestsContentEqual(remoteRequests, state.requests);
+    if (requestsChanged) state.requests = remoteRequests;
+
+    if (!state.hasGenerated) {
+      if (requestsChanged) {
+        renderOtherList();
+        showToast('希望休の変更を反映しました', 'success');
+      }
+      return;
+    }
+
+    const [assignRes, remoteGenerated] = await Promise.all([
+      supabase.from('ringo_shift_assignments').select('*').eq('year_month', yearMonth),
+      fetchGeneratedAssignments(yearMonth),
+    ]);
+    if (assignRes.error) return;
+    const remote = normalizeAssignmentWorkPatterns(assignRes.data || []);
+
+    if (remote.length === 0) {
+      if (state.assignments.length > 0) await loadExistingAssignments();
+      return;
+    }
+
+    const assignmentsChanged = !assignmentsContentEqual(remote, state.assignments);
+
+    // 生成スナップショットは新しいときだけ取り込む（古い上書きで差分マークが残るのを防ぐ）
+    let generatedChanged = false;
+    if (remoteGenerated) {
+      if (assignmentsChanged) {
+        if (!isGeneratedSnapshotNewer(state.generatedAssignments, remoteGenerated)) {
+          state.generatedAssignments = remoteGenerated;
+          generatedChanged = true;
+        }
+      } else if (isGeneratedSnapshotNewer(remoteGenerated, state.generatedAssignments)) {
+        state.generatedAssignments = remoteGenerated;
+        generatedChanged = true;
+      }
+    }
+
+    if (!assignmentsChanged && !requestsChanged && !generatedChanged) return;
+
+    if (assignmentsChanged || generatedChanged) {
+      state.assignments = remote;
+      initHistoryFromDb(state.assignments);
+    }
+    renderGantt();
+    renderConditionsCheck();
+    renderOtherList();
+    renderDiffPanel();
+    if (assignmentsChanged || requestsChanged) {
+      showToast(
+        assignmentsChanged ? '他の端末の変更を反映しました' : '希望休の変更を反映しました',
+        'success',
+      );
+    }
+  } catch (e) {
+    console.error(e);
+  } finally {
+    _syncAssignmentsInFlight = false;
+  }
 }
 
 // ============================================================
@@ -699,45 +865,51 @@ async function loadExistingAssignments() {
     showToast('希望休の取得に失敗しました。再読み込みしてください', 'error');
   }
   state.requests = requests || [];
+  // 前月末からの連勤表示・連勤チェック用
+  await loadPrevMonthContext(yearMonth);
 
-  const { data, error } = await supabase
-    .from('ringo_shift_assignments')
-    .select('*')
-    .eq('year_month', yearMonth);
+  const [assignRes, generated] = await Promise.all([
+    supabase.from('ringo_shift_assignments').select('*').eq('year_month', yearMonth),
+    fetchGeneratedAssignments(yearMonth),
+  ]);
+  state.generatedAssignments = generated || [];
 
-  if (error) {
-    console.error('Error loading assignments:', error);
+  if (assignRes.error) {
+    console.error('Error loading assignments:', assignRes.error);
+    showToast('シフトの取得に失敗しました。再読み込みしてください', 'error');
     state.assignments = [];
   } else {
-    state.assignments = normalizeAssignmentWorkPatterns(data);
+    // 表示の正は常に DB（手動修正も upsert / save 済み）。localStorage は Undo 用のみ
+    state.assignments = normalizeAssignmentWorkPatterns(assignRes.data || []);
   }
 
   if (state.assignments.length > 0) {
     state.hasGenerated = true;
     document.getElementById('btn-csv').disabled = false;
+
+    const localData = loadHistoryFromLocal(yearMonth);
+    const tipIndex = localData?.historyIndex ?? ((localData?.history?.length || 0) - 1);
+    const tip = localData?.history?.[tipIndex];
+    // 同じ PC で Undo を続けられるのは、ローカル履歴の現在位置が DB と一致するときだけ
+    // （以前はローカル履歴を DB より優先して表示し、他PCの変更が見えなくなることがあった）
+    if (localData?.history?.length > 0 && tip && assignmentsContentEqual(tip, state.assignments)) {
+      state.baselineAssignments = state.generatedAssignments.length > 0
+        ? generatedToAssignments(state.generatedAssignments)
+        : (localData.baseline || cloneAssignments(state.assignments));
+      state.history = localData.history;
+      state.historyIndex = tipIndex;
+      updateUndoRedoButtons();
+    } else {
+      initHistoryFromDb(state.assignments);
+    }
     renderGantt();
     renderConditionsCheck();
     renderOtherList();
-
-    // 初期状態を保存（リセット・Undo用）
-    const localData = loadHistoryFromLocal(yearMonth);
-    // DBの内容と大きく乖離していない前提で、ローカルキャッシュに履歴があれば復元
-    if (localData && localData.history && localData.history.length > 0) {
-      state.baselineAssignments = localData.baseline;
-      state.history = localData.history;
-      state.historyIndex = localData.historyIndex ?? (localData.history.length - 1);
-      // DBよりもローカルの最新履歴（未保存状態など）を優先して復元する
-      state.assignments = normalizeAssignmentWorkPatterns(cloneAssignments(state.history[state.historyIndex]));
-      // もしDBと同期させたい場合はここでsaveAssignmentsを呼ぶのもあり
-    } else {
-      state.baselineAssignments = cloneAssignments(state.assignments);
-      state.history = [cloneAssignments(state.assignments)];
-      state.historyIndex = 0;
-      saveHistoryToLocal();
-    }
-    updateUndoRedoButtons();
+    renderDiffPanel();
   } else {
     state.hasGenerated = false;
+    state.generatedAssignments = [];
+    renderDiffPanel();
     document.getElementById('btn-csv').disabled = true;
     document.getElementById('gantt-table').style.display = 'none';
     document.getElementById('gantt-placeholder').style.display = 'flex';
@@ -755,10 +927,37 @@ async function loadExistingAssignments() {
 // ============================================================
 // シフト生成アルゴリズム
 // ============================================================
+// 前月のシフトを読み込む（月跨ぎ連勤の表示・チェック・生成用）。成否を返す
+async function loadPrevMonthContext(yearMonth) {
+  const prevYM = getPrevYearMonth(yearMonth);
+  const { data, error } = await supabase
+    .from('ringo_shift_assignments')
+    .select('staff_id, date, attendance_type, work_pattern, year_month')
+    .eq('year_month', prevYM);
+  if (error) {
+    console.error('Error loading previous month assignments:', error);
+    state.prevAssignments = [];
+    return false;
+  }
+  state.prevAssignments = normalizeAssignmentWorkPatterns(data || []);
+  return true;
+}
+
+function _getPrevCarryover(staffId, yearMonth) {
+  return computePrevCarryover(state.prevAssignments, staffId, yearMonth);
+}
+
 async function handleGenerate() {
+  if (state.hasGenerated) {
+    const diffCount = collectGeneratedDiffs(state.generatedAssignments, state.assignments, state.staffList).length;
+    const extra = diffCount > 0 ? `\n手で直したマスが ${diffCount} 件あります。` : '';
+    if (!confirm(`この月のシフトを再生成します。${extra}\n生成直後の記録も新しい結果で上書きされます。`)) return;
+  }
+
   const btn = document.getElementById('btn-generate');
   btn.disabled = true;
   btn.innerHTML = '<span class="loader"></span> 生成中...';
+  _generatingInFlight = true;
 
   try {
     const yearMonth = getCurrentYearMonth();
@@ -769,6 +968,9 @@ async function handleGenerate() {
     const requests = await loadRequests(yearMonth);
     if (requests === null) throw new Error('希望休を取得できませんでした。通信状況を確認して再度お試しください');
     state.requests = requests;
+    // 前月末からの連勤を引き継がないと、月をまたいで連勤上限を超えるシフトができてしまう
+    const prevOk = await loadPrevMonthContext(yearMonth);
+    if (!prevOk) throw new Error('前月のシフトを取得できませんでした。通信状況を確認して再度お試しください');
 
     // スコアリング生成：複数回試行して最高スコアを採用
     const TRIAL_COUNT = 30;
@@ -790,29 +992,46 @@ async function handleGenerate() {
       }
     }
 
-    // 常に新規生成結果を採用（気に入らなければundo/resetで戻せる）
-    state.assignments = bestAssignments;
+    // 生成直後＝リセット相当：手動フラグなし・差分なしのクリーン状態で保存
+    const generatedAt = new Date().toISOString();
+    const clean = bestAssignments.map(a => ({
+      year_month: a.year_month,
+      staff_id: a.staff_id,
+      date: a.date,
+      attendance_type: a.attendance_type,
+      work_pattern: a.work_pattern || '',
+      is_manual_override: false,
+    }));
+
+    // 保存に成功してから画面の状態を更新する（失敗時に未保存の結果を表示しない）
+    await saveAssignments(yearMonth, clean);
+    const snapshotSaved = await saveGeneratedAssignments(yearMonth, clean, generatedAt);
+
+    state.assignments = clean;
+    state.generatedAssignments = snapshotSaved
+      ? clean.map(a => ({ ...a, generated_at: generatedAt }))
+      : [];
     state.warnings = bestWarnings;
     state.lastScore = bestScore;
     state.lastBreakdown = bestBreakdown;
-    await saveAssignments(yearMonth, bestAssignments);
-    console.log(`シフト生成完了 スコア: ${bestScore}`, bestBreakdown);
-
     state.hasGenerated = true;
-    document.getElementById('btn-csv').disabled = false;
-    renderGantt();
-    renderConditionsCheck();
-
     // baseline保存 + 履歴初期化
-    state.baselineAssignments = cloneAssignments(state.assignments);
-    state.history = [cloneAssignments(state.assignments)];
+    state.baselineAssignments = cloneAssignments(clean);
+    state.history = [cloneAssignments(clean)];
     state.historyIndex = 0;
     updateUndoRedoButtons();
     saveHistoryToLocal();
+    console.log(`シフト生成完了 スコア: ${bestScore}`, bestBreakdown);
+
+    document.getElementById('btn-csv').disabled = false;
+    renderGantt();
+    renderConditionsCheck();
+    renderDiffPanel();
   } catch (err) {
     console.error(err);
     showToast('生成エラー: ' + err.message, 'error');
   } finally {
+    _generatingInFlight = false;
     btn.disabled = false;
     btn.innerHTML = '<i data-lucide="sparkles" class="icon-md"></i> シフト生成';
     lucide.createIcons();
@@ -834,14 +1053,12 @@ function _restDays(assignments, staffId) {
 function _countPattern(assignments, staffId, pattern) {
   return _staffAssignments(assignments, staffId).filter(a => a.work_pattern === pattern).length;
 }
-function _maxConsecutiveWork(assignments, staffId) {
-  const sorted = _staffAssignments(assignments, staffId).sort((a, b) => a.date.localeCompare(b.date));
-  let max = 0, count = 0;
-  for (const a of sorted) {
-    if (a.work_pattern && a.work_pattern !== '') { count++; max = Math.max(max, count); }
-    else { count = 0; }
-  }
-  return max;
+// yearMonth を渡すと前月末からの連勤を引き継いで数える。
+// opts.withCarry=true のとき { max, carry, carriedIntoMax } を返す（既定は max のみ）
+function _maxConsecutiveWork(assignments, staffId, yearMonth, opts = {}) {
+  const carry = yearMonth ? _getPrevCarryover(staffId, yearMonth).streakWork : 0;
+  const detail = maxConsecutiveWithCarry(_staffAssignments(assignments, staffId), carry);
+  return opts.withCarry ? detail : detail.max;
 }
 function _maxConsecutiveWorkIncludingDispense(assignments, staffId, yearMonth, daysInMonth) {
   const works = _workDays(assignments, staffId).map(a => a.date);
@@ -962,7 +1179,9 @@ function runAllChecks(assignments, yearMonth) {
   for (const staff of staffList) {
     const workAssignments = work(staff.id);
     const workCount = workAssignments.length;
-    const consec = _maxConsecutiveWork(assignments, staff.id);
+    // 前月末からの連勤を引き継いで数える（月跨ぎで上限を超えていないかも見る）
+    const consecDetail = _maxConsecutiveWork(assignments, staff.id, yearMonth, { withCarry: true });
+    const consec = consecDetail.max;
     const items = [];
     
     // 1. 固定休の遵守チェック（一番上）
@@ -1051,7 +1270,7 @@ function runAllChecks(assignments, yearMonth) {
     
     // 3. 連勤チェック（湯本は最大2、それ以外は基本5）
     const maxConsec = staff.name.includes('湯本') ? 2 : (staff.work_conditions?.max_consecutive_days || 5);
-    items.push({ id: `${staff.id}-consec`, tag: '絶対', status: consec <= maxConsec ? 'pass' : 'fail', text: `連勤：${maxConsec}連勤まで`, value: `${consec}日`, scoreDelta: consec > maxConsec ? -50 * (consec - maxConsec) : 0 });
+    items.push({ id: `${staff.id}-consec`, tag: '絶対', status: consec <= maxConsec ? 'pass' : 'fail', text: `連勤：${maxConsec}連勤まで`, value: consecValueText(consecDetail), scoreDelta: consec > maxConsec ? -50 * (consec - maxConsec) : 0 });
 
     // 4. 勤務日数チェック
     const cond = staff.work_conditions || {};
@@ -1212,6 +1431,13 @@ function generateShifts(yearMonth, manualOverrides, manualSet, randomize = false
   const workCounts = {};
   activeStaff.forEach(s => {
     workCounts[s.id] = { total: 0, consecutiveDays: 0, lastWorkedDate: null };
+    // 前月末から連勤が続いている場合は、その連勤数を初期値として引き継ぐ
+    // （当月初日も勤務になると連勤が継続加算され、月跨ぎでの上限超過を防げる）
+    const carry = _getPrevCarryover(s.id, yearMonth);
+    if (carry.streakWork > 0) {
+      workCounts[s.id].consecutiveDays = carry.streakWork;
+      workCounts[s.id].lastWorkedDate = carry.prevLastDate;
+    }
   });
 
   function canWork(staffId, dateStr) {
@@ -1501,6 +1727,40 @@ async function saveAssignments(yearMonth, assignments) {
   return true;
 }
 
+// 生成直後スナップショットを保存する（その月の記録は上書き）。
+// テーブル未作成・保存失敗でもシフト本体は保存済みのため生成は止めず、false を返して通知する
+async function saveGeneratedAssignments(yearMonth, assignments, generatedAt) {
+  if (!state.generatedTableAvailable) return false;
+  const rows = assignments.map(a => ({
+    year_month: a.year_month,
+    staff_id: a.staff_id,
+    date: a.date,
+    attendance_type: a.attendance_type,
+    work_pattern: a.work_pattern || '',
+    generated_at: generatedAt,
+  }));
+
+  const { error: delError } = await supabase.from(GENERATED_TABLE).delete().eq('year_month', yearMonth);
+  if (delError) {
+    if (isMissingGeneratedTable(delError)) {
+      state.generatedTableAvailable = false;
+      console.warn(`${GENERATED_TABLE} が未作成のため、生成直後の記録は保存しません`);
+      return false;
+    }
+    console.error('Error deleting generated snapshot:', delError);
+    showToast('生成直後の記録の保存に失敗しました（シフトは保存済み）', 'error');
+    return false;
+  }
+  if (rows.length === 0) return true;
+  const { error: insError } = await supabase.from(GENERATED_TABLE).insert(rows);
+  if (insError) {
+    console.error('Error saving generated snapshot:', insError);
+    showToast('生成直後の記録の保存に失敗しました（シフトは保存済み）', 'error');
+    return false;
+  }
+  return true;
+}
+
 // ============================================================
 // ガントチャート描画
 // ============================================================
@@ -1513,9 +1773,16 @@ function renderGantt() {
   document.getElementById('gantt-placeholder').style.display = 'none';
   document.getElementById('gantt-table').style.display = 'table';
 
+  // 前月末日（前月末の連勤キャリー列の見出し用）
+  const prevYM = getPrevYearMonth(getCurrentYearMonth());
+  const [prevY, prevM] = prevYM.split('-').map(Number);
+  const prevLastDayNum = new Date(prevY, prevM, 0).getDate();
+  const prevLastDt = new Date(prevY, prevM - 1, prevLastDayNum);
+
   // ヘッダー
   const thead = document.getElementById('gantt-head');
-  let headHtml = '<tr><th class="staff-name">スタッフ</th><th class="gantt-summary-col">集計</th>';
+  let headHtml = '<tr><th class="staff-name">スタッフ</th><th class="gantt-summary-col">集計</th>'
+    + `<th class="gantt-prev-carry" title="前月末日の勤務と連勤">前月末<br><span class="gantt-day-name">${prevM}/${prevLastDayNum}（${dayNames[prevLastDt.getDay()]}）</span></th>`;
   for (let d = 1; d <= daysInMonth; d++) {
     const dt = new Date(state.currentYear, state.currentMonth, d);
     const dow = dt.getDay();
@@ -1579,6 +1846,7 @@ function renderGantt() {
 
     const summaryStateClass = cellColor ? ` gantt-summary-col--${cellColor}` : '';
     bodyHtml += `<td class="gantt-summary-col${summaryStateClass}">${summaryLabel}</td>`;
+    bodyHtml += buildPrevCarryCellHtml(staff, ym);
     for (let d = 1; d <= daysInMonth; d++) {
       const dateStr = `${state.currentYear}-${String(state.currentMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
       const dt = new Date(state.currentYear, state.currentMonth, d);
@@ -1619,6 +1887,11 @@ function renderGantt() {
       }
 
       if (isManual) cellClass += ' is-manual';
+      // 生成直後の記録と違うマスに印を付ける（記録がない月は付けない）
+      if (state.generatedAssignments.length > 0) {
+        const generated = state.generatedAssignments.find(a => a.staff_id === staff.id && a.date === dateStr);
+        if (generated && !assignmentCellsEqual(assign, generated)) cellClass += ' is-from-generated';
+      }
 
       if (pattern && PATTERN_CSS[pattern]) {
         const cssClass = PATTERN_CSS[pattern];
@@ -1687,10 +1960,48 @@ function renderGantt() {
   });
 }
 
+// 前月末日の勤務と、そこまでの連勤日数を表示するセル
+function buildPrevCarryCellHtml(staff, yearMonth) {
+  const carry = _getPrevCarryover(staff.id, yearMonth);
+  const prevLast = carry.prevLastDate;
+  const [, pm, pd] = prevLast.split('-').map(Number);
+  const dateLabel = `${pm}/${pd}（${DAY_NAMES[new Date(prevLast + 'T00:00:00').getDay()]}）`;
+  const maxConsec = staff.name.includes('湯本') ? 2 : (staff.work_conditions?.max_consecutive_days || 5);
+
+  if (staff.staff_type === 'external') {
+    return '<td class="gantt-prev-carry"><span class="prev-carry-empty">—</span></td>';
+  }
+  if (state.prevAssignments.length === 0) {
+    return '<td class="gantt-prev-carry" title="前月のシフトなし"><span class="prev-carry-empty">—</span></td>';
+  }
+
+  const prevAssign = state.prevAssignments.find(a => a.staff_id === staff.id && a.date === prevLast);
+  const pattern = normalizeWorkPattern(prevAssign?.work_pattern);
+  if (!pattern) {
+    return `<td class="gantt-prev-carry is-off" title="${dateLabel}：休み（連勤なし）"><span class="prev-carry-off">休</span></td>`;
+  }
+
+  const streak = carry.streakWork;
+  const atMax = streak >= maxConsec;
+  const label = PATTERN_LABEL[pattern] || pattern.substring(0, 2);
+  const markerCls = PATTERN_CSS[pattern] || 'pattern-marker--special';
+  const isConsecutive = streak >= 2;
+  const title = isConsecutive
+    ? `${dateLabel}：${pattern}・${streak}勤目（上限${maxConsec}${atMax ? '・当月1日は勤務不可' : ''}）`
+    : `${dateLabel}：${pattern}（連勤なし）`;
+  const streakHtml = isConsecutive ? `<span class="prev-carry-streak">${streak}勤目</span>` : '';
+  return `<td class="gantt-prev-carry${atMax ? ' is-at-max' : ''}" title="${escapeHtml(title)}">
+      <div class="prev-carry-inner">
+        <div class="pattern-marker ${markerCls}">${escapeHtml(label)}</div>
+        ${streakHtml}
+      </div>
+    </td>`;
+}
+
 function renderGanttFooter(daysInMonth, sortedStaff) {
   const tfoot = document.getElementById('gantt-foot');
   // ヘッダー・ボディと同じ列順: スタッフ名 → 集計 → 日付…
-  let summaryRow = '<td class="staff-name gantt-summary-label">出勤数</td><td class="gantt-summary-col"></td>';
+  let summaryRow = '<td class="staff-name gantt-summary-label">出勤数</td><td class="gantt-summary-col"></td><td class="gantt-prev-carry"></td>';
 
   for (let d = 1; d <= daysInMonth; d++) {
     const dateStr = `${state.currentYear}-${String(state.currentMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
@@ -1844,6 +2155,7 @@ function openCellEditor(cell, staff, dateStr) {
       state.lastBreakdown = newBreakdown;
       renderGantt();
       renderConditionsCheck();
+      renderDiffPanel();
       pushHistory();
     });
   });
@@ -1994,6 +2306,84 @@ async function downloadAsShiftJIS(text, filename) {
   a.click();
   URL.revokeObjectURL(url);
   showToast('CSVを出力しました', 'success');
+}
+
+// ============================================================
+// 生成からの差分パネル・差分CSV
+// ============================================================
+function formatGeneratedAt(iso) {
+  if (!iso) return '';
+  const dt = new Date(iso);
+  if (Number.isNaN(dt.getTime())) return '';
+  const p = n => String(n).padStart(2, '0');
+  return `${dt.getFullYear()}/${dt.getMonth() + 1}/${dt.getDate()} ${p(dt.getHours())}:${p(dt.getMinutes())}`;
+}
+
+function renderDiffPanel() {
+  const panel = document.getElementById('diff-panel');
+  if (!panel) return;
+  const badge = document.getElementById('diff-header-badge');
+  const meta = document.getElementById('diff-meta');
+  const body = document.getElementById('diff-body');
+  const csvBtn = document.getElementById('btn-diff-csv');
+
+  if (!state.hasGenerated) {
+    panel.style.display = 'none';
+    return;
+  }
+  panel.style.display = 'block';
+
+  if (!state.generatedAssignments.length) {
+    if (badge) {
+      badge.textContent = '記録なし';
+      badge.className = 'conditions-header-badge';
+    }
+    if (meta) {
+      meta.textContent = state.generatedTableAvailable
+        ? 'この月は生成直後の記録がありません。次回「シフト生成」から残ります。'
+        : '生成直後の記録用テーブルが未作成です（sql/add_generated_assignments.sql）。';
+    }
+    if (body) body.innerHTML = '';
+    if (csvBtn) csvBtn.disabled = true;
+    return;
+  }
+
+  const diffs = collectGeneratedDiffs(state.generatedAssignments, state.assignments, state.staffList);
+  const generatedAt = state.generatedAssignments[0]?.generated_at;
+  if (badge) {
+    badge.textContent = diffs.length === 0 ? '差分なし' : `${diffs.length}件`;
+    badge.className = 'conditions-header-badge ' + (diffs.length === 0 ? 'conditions-header-badge--ok' : 'conditions-header-badge--ng');
+  }
+  if (meta) meta.textContent = generatedAt ? `生成: ${formatGeneratedAt(generatedAt)}` : '';
+  if (csvBtn) csvBtn.disabled = diffs.length === 0;
+
+  if (!body) return;
+  if (diffs.length === 0) {
+    body.innerHTML = '<p class="diff-panel__empty">生成結果から手動で変えたマスはありません。</p>';
+    return;
+  }
+
+  let html = '<table class="diff-table"><thead><tr><th>スタッフ</th><th>日付</th><th>生成</th><th>いま</th></tr></thead><tbody>';
+  for (const d of diffs) {
+    const dt = new Date(d.date + 'T00:00:00');
+    html += `<tr><td>${escapeHtml(d.staff_name)}</td><td>${escapeHtml(formatDateLabel(dt))}</td><td>${escapeHtml(d.from_label)}</td><td>${escapeHtml(d.to_label)}</td></tr>`;
+  }
+  html += '</tbody></table>';
+  body.innerHTML = html;
+}
+
+function handleDiffCsvExport() {
+  const diffs = collectGeneratedDiffs(state.generatedAssignments, state.assignments, state.staffList);
+  if (!diffs.length) return;
+  const yearMonth = getCurrentYearMonth();
+  const blob = new Blob([buildDiffCsv(diffs, yearMonth)], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `シフト差分_${yearMonth}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('差分CSVを出力しました', 'success');
 }
 
 function loadScript(src) {
