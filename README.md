@@ -60,14 +60,14 @@ admin.html                  スタッフ管理
 js/main.js                  希望入力のUI・データ処理
 js/generate.js              生成・チェック・CSV出力
 js/admin.js                 スタッフ管理・表示色設定
-js/month-window.js          選択できる月の範囲（1〜15日は+4ヶ月、16日以降は+5ヶ月）
+js/month-window.js          選択できる月の範囲（2027年12月まで／以降は1〜15日+4ヶ月・16日以降+5ヶ月で自動延長）
 js/request-edit.js          希望休の保存・削除の判定（純粋関数）
 js/shift-snapshot.js        生成直後との差分・前月からの連勤キャリー（純粋関数）
 js/auth.js                  ログアウト処理（各ページ共通）
 js/supabase-config.js       環境別Supabase接続設定（機密値をコミットしない）
 sql/                        DB定義・RLSなど
 test/                       月窓・希望編集のテスト（npm test）
-.github/workflows/          CI（npm test）・Supabase自動停止防止（keepalive）
+.github/workflows/          CI（npm test）
 docs/ringo-requirements.md  現行要件の正本
 docs/shift-generation-requirements.md  補助的な制約チェック資料（旧条件の残存に注意）
 docs/money-forward-csv-notes.md        CSV取込時の注意
@@ -80,7 +80,8 @@ AGENTS.md / CLAUDE.md       開発・運用ルール
 - ローカル検証にはテスト用のSupabase環境を使用し、本番DBやスタッフの希望情報を勝手に操作しないでください
 - **本番のRLS（2026-10-24 にユーザーが SQL Editor で適用・確認）**: `ringo_staff` / `ringo_shift_requests` / `ringo_shift_assignments` に残るポリシーは `Allow access to Ringo user on <table>`（authenticated かつ email = `ringo@shift.com`）だけです。public 全許可・authenticated 全許可のポリシーは削除し、anon の権限は revoke 済み（未ログインは permission denied）。新規サインアップは無効です。現行定義は `sql/02_enable_rls.sql`
 - テストは `npm test`（Node 24、`.node-version`）。PR と `main` への push で GitHub Actions が実行する
-- Supabase の無料プランは無通信が続くと一時停止するため、`.github/workflows/supabase-keepalive.yml` が週2回 Auth の health に ping する。リポジトリの Secrets に `SUPABASE_URL` / `SUPABASE_ANON_KEY` の登録が必要
+- Supabase は複数アプリ（りんご・オオギ等）をひとまとめにした共有プロジェクト。テーブルは `ringo_` 接頭辞と `ringo@shift.com` 限定の RLS で分けている。新しいテーブルも同じ規則に従い、プロジェクト全体の設定（認証・拡張機能など）は他アプリにも影響する点に注意
+- 無料プランの自動停止防止（keepalive）は共有プロジェクト単位で効くため、オオギシフト側の `.github/workflows/supabase-keepalive.yml`（週2回）に任せ、りんご側には置かない
 - 生成直後の記録（リセット先・差分）は `sql/add_generated_assignments.sql`（`ringo_shift_generated_assignments` 作成・RLS）の適用が前提。未適用でも画面は「記録なし」として動く
 - 希望休の変更履歴は `sql/add_shift_request_change_history.sql`（`change_history` カラム追加）の適用が前提。未適用でも画面は履歴なしで動く
 - `sql/enable_rls.sql` は廃止した旧定義（全許可）の置き場で、本文は削除済みです。git 履歴から旧SQLを再適用しないでください

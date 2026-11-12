@@ -13,7 +13,7 @@ import {
   getCalendarMonthClamped,
   getMonthWindow,
   isMonthInWindow,
-} from './month-window.js';
+} from './month-window.js?v=2';
 import {
   getPrevYearMonth,
   assignmentsContentEqual,
